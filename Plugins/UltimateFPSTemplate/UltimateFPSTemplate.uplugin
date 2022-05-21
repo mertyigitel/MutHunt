@@ -1,0 +1,32 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "5",
+	"FriendlyName": "UltimateFPSTemplate",
+	"Description": "Ultimate Multiplayer FPS Templatehttps://online-leaks.com/",
+	"Category": "Ultimate First Person Shooter Template https://online-leaks.com/",
+	"CreatedBy": "Sneaky Kitty Game Dev",
+	"CreatedByURL": "https://online-leaks.com/",
+	"DocsURL": "https://online-leaks.com/",
+	"MarketplaceURL": "https://online-leaks.com/",
+	"SupportURL": "https://discord.gg/W5g6pZXfjh",
+	"EngineVersion": "5.0.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "UltimateFPSTemplate",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"WhitelistPlatforms": [
+				"Win64"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Niagara",
+			"Enabled": true
+		}
+	]
+}

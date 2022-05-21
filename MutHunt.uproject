@@ -9,7 +9,8 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
 			"AdditionalDependencies": [
-				"Engine"
+				"Engine",
+				"UltimateFPSTemplate"
 			]
 		}
 	],
@@ -29,6 +30,11 @@
 				"Mac",
 				"Linux"
 			]
+		},
+		{
+			"Name": "UltimateFPSTemplate",
+			"Enabled": true,
+			"MarketplaceURL": "https://online-leaks.com/"
 		}
 	]
 }
