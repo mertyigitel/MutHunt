@@ -30,6 +30,7 @@ protected:
 	//void EquipButtonPressed();
 	void AimButtonPressed();
 	void AimButtonReleased();
+	virtual void Jump() override;
 private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))

@@ -87,7 +87,7 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	FVector Velocity = CharacterComponent->GetMovementComponent()->Velocity;
 	Velocity.Z = 0.0f;
 	CharacterVelocity = Velocity.Size();
-	CharacterDirection = CalculateDirection(Velocity, CharacterComponent->GetOwner()->GetActorRotation());
+	//CharacterDirection = CalculateDirection(Velocity, CharacterComponent->GetOwner()->GetActorRotation());
 	
 	IsLocallyControlled();
 	AimingActor = CharacterComponent->GetAimingActor();

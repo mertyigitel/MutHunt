@@ -56,7 +56,7 @@ void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ThisClass::Jump);
+	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ASoldierCharacter::Jump);
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASoldierCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ASoldierCharacter::MoveRight);
@@ -145,6 +145,18 @@ void ASoldierCharacter::AimButtonReleased()
 		Combat->SetAiming(false);
 	}*/
 	CharacterComponent->StopAiming();
+}
+
+void ASoldierCharacter::Jump()
+{
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Super::Jump();
+	}
 }
 
 void ASoldierCharacter::OnRep_OverlappingWeapon(AWeapon* LastWeapon)
