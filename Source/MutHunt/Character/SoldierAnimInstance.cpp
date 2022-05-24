@@ -31,8 +31,11 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	FRotator AimRotation = SoldierCharacter->GetBaseAimRotation();
 	FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(SoldierCharacter->GetVelocity());
 	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation);
-	DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 10.f);
-	CharacterDirection = DeltaRotation.Yaw;
+	/*DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 10.f);
+	CharacterDirection = DeltaRotation.Yaw;*/
+	CharacterDirection = DeltaRot.Yaw;
+
+	CalculateMovementDirection();
 
 	bIsInAir = SoldierCharacter->GetMovementComponent()->IsFalling();
 	bIsAccelerating = SoldierCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0 ? true : false;
@@ -40,28 +43,41 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	//EquippedWeapon = SoldierCharacter->GetEquippedWeapon();
 	//bIsAiming = SoldierCharacter->IsAiming();
 
-	//if (bWeaponEquipped && EquippedWeapon && EquippedWeapon->GetWeaponMesh() && SoldierCharacter->GetMesh())
-	//{
-	//	LeftHandTransform = EquippedWeapon->GetWeaponMesh()->GetSocketTransform(FName("LeftHandSocket"), RTS_World);
-	//	FVector OutPosition;
-	//	FRotator OutRotation;
-	//	SoldierCharacter->GetMesh()->TransformToBoneSpace(FName("hand_r"), LeftHandTransform.GetLocation(), FRotator::ZeroRotator, OutPosition, OutRotation);
-	//	LeftHandTransform.SetLocation(OutPosition);
-	//	LeftHandTransform.SetRotation(FQuat(OutRotation));
-	//}
 
-	//// True FPS implementations
-	//if (bWeaponEquipped)
-	//{
-	//	IKProperties = EquippedWeapon->GetIKProperties();
-	//	RHandToSightsTransform = EquippedWeapon->GetSightsWorldTransform().GetRelativeTransform(Mesh->GetSocketTransform(FName("hand_r")));
-	//}
-	//CameraTransform = FTransform(SoldierCharacter->GetBaseAimRotation(), SoldierCharacter->Camera->GetComponentLocation());
-	//const FTransform& RootOffset = Mesh->GetSocketTransform(FName("root"), RTS_Component).Inverse() * Mesh->GetSocketTransform(FName("ik_hand_root"));
-	//RelativeCameraTransform = CameraTransform.GetRelativeTransform(RootOffset);
+}
 
-	//if(bAiming)
-	//	ADSWeight = FMath::FInterpTo(ADSWeight, 1.f, DeltaTime, 15.f);
-	//else
-	//	ADSWeight = FMath::FInterpTo(ADSWeight, 0.f, DeltaTime, 15.f);
+void USoldierAnimInstance::CalculateMovementDirection()
+{
+	if (CharacterDirection >= -22.5f && CharacterDirection < 22.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_Forward;
+	}
+	else if (CharacterDirection >= 22.5f && CharacterDirection < 67.f)
+	{
+		MovementDirection = EMovementDirection::EMD_ForwardRight;
+	}
+	else if (CharacterDirection >= 67.5f && CharacterDirection < 112.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_Right;
+	}
+	else if (CharacterDirection >= 112.5f && CharacterDirection < 157.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_BackRight;
+	}
+	else if ((CharacterDirection >= 157.5f && CharacterDirection <= 180.f) || (CharacterDirection >= -180.f && CharacterDirection < -157.5f))
+	{
+		MovementDirection = EMovementDirection::EMD_Back;
+	}
+	else if (CharacterDirection >= -157.5f && CharacterDirection < -112.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_BackLeft;
+	}
+	else if (CharacterDirection >= -112.5f && CharacterDirection < -67.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_Left;
+	}
+	else if (CharacterDirection >= -67.5f && CharacterDirection < -22.5f)
+	{
+		MovementDirection = EMovementDirection::EMD_ForwardLeft;
+	}
 }
