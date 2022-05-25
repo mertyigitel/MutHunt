@@ -11,4 +11,16 @@ class MUTHUNT_API USoldierCharacterComponent : public UFPSTemplate_CharacterComp
 {
 	GENERATED_BODY()
 	
+public:
+	USoldierCharacterComponent();
+	friend class ASoldierCharacter;
+
+	void EquipWeapon(class AWeapon* WeaponToEquip);
+protected:
+	virtual void BeginPlay() override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	
+private:
+	class ASoldierCharacter* Character;
+	AWeapon* EquippedWeapon;
 };

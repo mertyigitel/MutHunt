@@ -9,15 +9,15 @@
 
 AWeapon::AWeapon()
 {
-	PrimaryActorTick.bCanEverTick = true;
-	bReplicates = true;
+	//PrimaryActorTick.bCanEverTick = true;
+	//bReplicates = true;
 
-	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
-	SetRootComponent(WeaponMesh);
+	/*WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
+	SetRootComponent(WeaponMesh);*/
 
-	WeaponMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
-	WeaponMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
-	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FirearmMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
+	FirearmMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
+	FirearmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	AreaSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AreaSphere"));
 	AreaSphere->SetupAttachment(RootComponent);

@@ -4,22 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Actors/FPSTemplateFirearm.h"
 #include "Weapon.generated.h"
-
-USTRUCT(BlueprintType)
-struct FIKProperties 
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	class UAnimSequence* AnimPose;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float AimOffset = 15.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FTransform CustomOffsetTransform;
-};
 
 UENUM(BlueprintType)
 enum class EWeaponState : uint8
@@ -32,7 +18,7 @@ enum class EWeaponState : uint8
 };
 
 UCLASS()
-class MUTHUNT_API AWeapon : public AActor
+class MUTHUNT_API AWeapon : public AFPSTemplateFirearm
 {
 	GENERATED_BODY()
 	
@@ -63,8 +49,8 @@ protected:
 		);
 
 private:
-	UPROPERTY(VisibleAnywhere, Category = "WeaponProperties")
-	USkeletalMeshComponent* WeaponMesh;
+	/*UPROPERTY(VisibleAnywhere, Category = "WeaponProperties")
+	USkeletalMeshComponent* WeaponMesh;*/
 
 	UPROPERTY(VisibleAnywhere, Category = "WeaponProperties")
 	class USphereComponent* AreaSphere;
@@ -78,19 +64,8 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "WeaponProperties")
 	class UWidgetComponent* PickupWidget;
 
-	/*UPROPERTY(EditAnywhere, BlueprintReadWrite ,Category = "FPSProperties", meta = (AllowPrivateAccess = "true"))
-	FIKProperties IKProperties;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FPSProperties", meta = (AllowPrivateAccess = "true"))
-	FTransform PlacementTransform;*/
-
 public:
 	void SetWeaponState(EWeaponState State);
 	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
-	FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
-	//FORCEINLINE FIKProperties GetIKProperties() const { return IKProperties; }
-
-	/*UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "FPSProperties|IK")
-	FTransform GetSightsWorldTransform() const;
-	virtual FORCEINLINE FTransform GetSightsWorldTransform_Implementation() const { return WeaponMesh->GetSocketTransform(FName("Sights")); }*/
+	//FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
 };

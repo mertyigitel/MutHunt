@@ -10,22 +10,12 @@
 //#include "MutHunt/Components/SoldierCombatComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/FPSTemplate_CharacterComponent.h"
-#include "../Components/SoldierCharacterComponent.h"
+#include "MutHunt/Components/SoldierCharacterComponent.h"
+#include "Components/WidgetComponent.h"
 
 ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer) : Super::AFPSTemplateCharacter(ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = true;
-
-	/*GetMesh()->SetTickGroup(TG_PostUpdateWork);
-	GetMesh()->bVisibleInReflectionCaptures = true;
-	GetMesh()->bCastHiddenShadow = true;
-
-	ClientMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ClientMesh"));
-	ClientMesh->SetCastShadow(false);
-	ClientMesh->bCastHiddenShadow = false;
-	ClientMesh->bVisibleInReflectionCaptures = false;
-	ClientMesh->SetTickGroup(TG_PostUpdateWork);
-	ClientMesh->SetupAttachment(GetMesh());*/
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->bUsePawnControlRotation = true;
@@ -34,7 +24,11 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 	/*Combat = CreateDefaultSubobject<USoldierCombatComponent>(TEXT("CombatComponent"));
 	Combat->SetIsReplicated(true);*/
 
-	CharacterComponent = CreateDefaultSubobject<USoldierCharacterComponent>(TEXT("CharacterComponent"));
+	SoldierCharacterComponent = CreateDefaultSubobject<USoldierCharacterComponent>(TEXT("CharacterComponent"));
+	SoldierCharacterComponent->SetIsReplicated(true);
+
+	OverheadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverheadWidget"));
+	OverheadWidget->SetupAttachment(RootComponent);
 }
 
 void ASoldierCharacter::BeginPlay()
@@ -63,7 +57,7 @@ void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("Turn", this, &ASoldierCharacter::Turn);
 	PlayerInputComponent->BindAxis("LookUp", this, &ASoldierCharacter::LookUp);
 
-	//PlayerInputComponent->BindAction("Equip", IE_Pressed, this, &ASoldierCharacter::EquipButtonPressed);
+	PlayerInputComponent->BindAction("Equip", IE_Pressed, this, &ASoldierCharacter::EquipButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &ASoldierCharacter::AimButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &ASoldierCharacter::AimButtonReleased);
 }
@@ -78,10 +72,10 @@ void ASoldierCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void ASoldierCharacter::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-	/*if (Combat)
+	if (SoldierCharacterComponent)
 	{
-		Combat->Character = this;
-	}*/
+		SoldierCharacterComponent->Character = this;
+	}
 }
 
 void ASoldierCharacter::MoveForward(float Value)
@@ -114,20 +108,28 @@ void ASoldierCharacter::LookUp(float Value)
 	AddControllerPitchInput(Value);
 }
 
-//void ASoldierCharacter::EquipButtonPressed()
-//{
-//	if (Combat)
-//	{
-//		if (HasAuthority())
-//		{
-//			Combat->EquipWeapon(OverlappingWeapon);
-//		}
-//		else
-//		{
-//			ServerEquipButtonPressed();
-//		}
-//	}
-//}
+void ASoldierCharacter::EquipButtonPressed()
+{
+	if (SoldierCharacterComponent)
+	{
+		if (HasAuthority())
+		{
+			SoldierCharacterComponent->EquipWeapon(OverlappingWeapon);
+		}
+		else
+		{
+			ServerEquipButtonPressed();
+		}
+	}
+}
+
+void ASoldierCharacter::ServerEquipButtonPressed_Implementation()
+{
+	if (SoldierCharacterComponent)
+	{
+		SoldierCharacterComponent->EquipWeapon(OverlappingWeapon);
+	}
+}
 
 void ASoldierCharacter::AimButtonPressed()
 {
@@ -135,7 +137,7 @@ void ASoldierCharacter::AimButtonPressed()
 	{
 		Combat->SetAiming(true);
 	}*/
-	CharacterComponent->StartAiming();
+	SoldierCharacterComponent->StartAiming();
 }
 
 void ASoldierCharacter::AimButtonReleased()
@@ -144,7 +146,7 @@ void ASoldierCharacter::AimButtonReleased()
 	{
 		Combat->SetAiming(false);
 	}*/
-	CharacterComponent->StopAiming();
+	SoldierCharacterComponent->StopAiming();
 }
 
 void ASoldierCharacter::Jump()

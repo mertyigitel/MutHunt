@@ -21,7 +21,7 @@ enum class EMovementDirection : uint8
 	EMD_BackRight UMETA(DisplayName = "BackRight"),
 	EMD_BackLeft UMETA(DisplayName = "BackLeft"),
 
-	EMD_MAX UMETA(DisplayName = "DefaultMAX"),
+	EMD_MAX UMETA(DisplayName = "DefaultMAX")
 };
 
 UCLASS()

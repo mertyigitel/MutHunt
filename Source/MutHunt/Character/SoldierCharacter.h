@@ -27,7 +27,7 @@ protected:
 	void MoveRight(float Value);
 	void Turn(float Value);
 	void LookUp(float Value);
-	//void EquipButtonPressed();
+	void EquipButtonPressed();
 	void AimButtonPressed();
 	void AimButtonReleased();
 	virtual void Jump() override;
@@ -36,20 +36,20 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* Camera;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	class UWidgetComponent* OverheadWidget;
+
 	UPROPERTY(ReplicatedUsing = OnRep_OverlappingWeapon)
 	class AWeapon* OverlappingWeapon;
 
 	UFUNCTION()
 	void OnRep_OverlappingWeapon(AWeapon* LastWeapon);
 
-	/*UPROPERTY(VisibleAnywhere)
-	class USoldierCombatComponent* Combat;*/
+	UPROPERTY(VisibleAnywhere)
+	class USoldierCharacterComponent* SoldierCharacterComponent;
 
-	/*UFUNCTION(Server, Reliable)
-	void ServerEquipButtonPressed();*/
-
-	/*UPROPERTY(VisibleAnywhere ,BlueprintReadWrite, Category = "TrueFPS", meta = (AllowPrivateAccess = "true"))
-	class USkeletalMeshComponent* ClientMesh;*/
+	UFUNCTION(Server, Reliable)
+	void ServerEquipButtonPressed();
 
 public:	
 	void SetOverlappingWeapon(AWeapon* Weapon);
