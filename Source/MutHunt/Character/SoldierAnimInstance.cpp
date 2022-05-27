@@ -39,7 +39,7 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 
 	bIsInAir = SoldierCharacter->GetMovementComponent()->IsFalling();
 	bIsAccelerating = SoldierCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0 ? true : false;
-	//bWeaponEquipped = SoldierCharacter->IsWeaponEquipped();
+	bWeaponEquipped = SoldierCharacter->IsWeaponEquipped();
 	//EquippedWeapon = SoldierCharacter->GetEquippedWeapon();
 	//bIsAiming = SoldierCharacter->IsAiming();
 

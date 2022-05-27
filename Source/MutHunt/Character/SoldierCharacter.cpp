@@ -197,10 +197,10 @@ void ASoldierCharacter::SetOverlappingWeapon(AWeapon* Weapon)
 	}
 }
 
-//bool ASoldierCharacter::IsWeaponEquipped()
-//{
-//	return (Combat && Combat->EquippedWeapon);
-//}
+bool ASoldierCharacter::IsWeaponEquipped()
+{
+	return (SoldierCharacterComponent && SoldierCharacterComponent->EquippedWeapon);
+}
 
 //bool ASoldierCharacter::IsAiming()
 //{
