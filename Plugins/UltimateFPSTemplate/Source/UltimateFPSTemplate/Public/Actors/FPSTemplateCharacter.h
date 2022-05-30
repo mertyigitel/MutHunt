@@ -3,13 +3,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Character/ALSCharacter.h"
 #include "FPSTemplateCharacter.generated.h"
 
 class UInputComponent;
 class UFPSTemplate_CharacterComponent;
 
 UCLASS()
-class ULTIMATEFPSTEMPLATE_API AFPSTemplateCharacter : public ACharacter
+class ULTIMATEFPSTEMPLATE_API AFPSTemplateCharacter : public AALSCharacter
 {
 	GENERATED_BODY()
 protected:

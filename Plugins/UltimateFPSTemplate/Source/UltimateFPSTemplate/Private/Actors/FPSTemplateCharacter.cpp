@@ -14,8 +14,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
-AFPSTemplateCharacter::AFPSTemplateCharacter(const FObjectInitializer& ObjectInitializer)
-	:Super(ObjectInitializer.SetDefaultSubobjectClass<UFPS_CharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
+AFPSTemplateCharacter::AFPSTemplateCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+	//:Super(ObjectInitializer.SetDefaultSubobjectClass<UFPS_CharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	PrimaryActorTick.bCanEverTick = true;
 	
@@ -25,5 +25,5 @@ AFPSTemplateCharacter::AFPSTemplateCharacter(const FObjectInitializer& ObjectIni
 	GetMesh()->bCastHiddenShadow = true;
 
 	// Commented out because we will derive our own CharacterComponent class!!!
-	//CharacterComponent = CreateDefaultSubobject<UFPSTemplate_CharacterComponent>(TEXT("CharacterComponent"));
+	CharacterComponent = CreateDefaultSubobject<UFPSTemplate_CharacterComponent>(TEXT("CharacterComponent"));
 }

@@ -31,7 +31,8 @@ public class UltimateFPSTemplate : ModuleRules
 				"Json",
 				"JsonUtilities",
 				"Http",
-				"UMG"
+				"UMG",
+				"ALSV4_CPP"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

@@ -8,7 +8,7 @@ public class MutHunt : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "UltimateFPSTemplate" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "UMG", "UltimateFPSTemplate", "ALSV4_CPP" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

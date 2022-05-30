@@ -52,12 +52,12 @@ private:
 
 	FRotator DeltaRotation;
 
-	UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	EMovementDirection MovementDirection;
+	/*UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	EMovementDirection MovementDirection;*/
 
 	/*UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	bool bAiming;*/
 
 protected:
-	void CalculateMovementDirection();
+	//void CalculateMovementDirection();
 };

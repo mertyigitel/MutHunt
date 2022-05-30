@@ -24,8 +24,8 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 	/*Combat = CreateDefaultSubobject<USoldierCombatComponent>(TEXT("CombatComponent"));
 	Combat->SetIsReplicated(true);*/
 
-	SoldierCharacterComponent = CreateDefaultSubobject<USoldierCharacterComponent>(TEXT("CharacterComponent"));
-	SoldierCharacterComponent->SetIsReplicated(true);
+	/*SoldierCharacterComponent = CreateDefaultSubobject<USoldierCharacterComponent>(TEXT("CharacterComponent"));
+	SoldierCharacterComponent->SetIsReplicated(true);*/
 
 	OverheadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverheadWidget"));
 	OverheadWidget->SetupAttachment(RootComponent);

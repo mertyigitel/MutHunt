@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "FPSTemplateDataTypes.h"
+#include "Character/Animation/ALSCharacterAnimInstance.h"
 
 #include "FPSTemplateAnimInstance.generated.h"
 
@@ -12,7 +13,7 @@ class UFPSTemplate_CharacterComponent;
 class UAnimSequence;
 
 UCLASS()
-class ULTIMATEFPSTEMPLATE_API UFPSTemplateAnimInstance : public UAnimInstance
+class ULTIMATEFPSTEMPLATE_API UFPSTemplateAnimInstance : public UALSCharacterAnimInstance
 {
 	GENERATED_BODY()
 		

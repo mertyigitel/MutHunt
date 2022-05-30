@@ -35,7 +35,7 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	CharacterDirection = DeltaRotation.Yaw;*/
 	CharacterDirection = DeltaRot.Yaw;
 
-	CalculateMovementDirection();
+	//CalculateMovementDirection();
 
 	bIsInAir = SoldierCharacter->GetMovementComponent()->IsFalling();
 	bIsAccelerating = SoldierCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0 ? true : false;
@@ -46,38 +46,38 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 
 }
 
-void USoldierAnimInstance::CalculateMovementDirection()
-{
-	if (CharacterDirection >= -22.5f && CharacterDirection < 22.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_Forward;
-	}
-	else if (CharacterDirection >= 22.5f && CharacterDirection < 67.f)
-	{
-		MovementDirection = EMovementDirection::EMD_ForwardRight;
-	}
-	else if (CharacterDirection >= 67.5f && CharacterDirection < 112.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_Right;
-	}
-	else if (CharacterDirection >= 112.5f && CharacterDirection < 157.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_BackRight;
-	}
-	else if ((CharacterDirection >= 157.5f && CharacterDirection <= 180.f) || (CharacterDirection >= -180.f && CharacterDirection < -157.5f))
-	{
-		MovementDirection = EMovementDirection::EMD_Back;
-	}
-	else if (CharacterDirection >= -157.5f && CharacterDirection < -112.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_BackLeft;
-	}
-	else if (CharacterDirection >= -112.5f && CharacterDirection < -67.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_Left;
-	}
-	else if (CharacterDirection >= -67.5f && CharacterDirection < -22.5f)
-	{
-		MovementDirection = EMovementDirection::EMD_ForwardLeft;
-	}
-}
+//void USoldierAnimInstance::CalculateMovementDirection()
+//{
+//	if (CharacterDirection >= -22.5f && CharacterDirection < 22.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_Forward;
+//	}
+//	else if (CharacterDirection >= 22.5f && CharacterDirection < 67.f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_ForwardRight;
+//	}
+//	else if (CharacterDirection >= 67.5f && CharacterDirection < 112.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_Right;
+//	}
+//	else if (CharacterDirection >= 112.5f && CharacterDirection < 157.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_BackRight;
+//	}
+//	else if ((CharacterDirection >= 157.5f && CharacterDirection <= 180.f) || (CharacterDirection >= -180.f && CharacterDirection < -157.5f))
+//	{
+//		MovementDirection = EMovementDirection::EMD_Back;
+//	}
+//	else if (CharacterDirection >= -157.5f && CharacterDirection < -112.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_BackLeft;
+//	}
+//	else if (CharacterDirection >= -112.5f && CharacterDirection < -67.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_Left;
+//	}
+//	else if (CharacterDirection >= -67.5f && CharacterDirection < -22.5f)
+//	{
+//		MovementDirection = EMovementDirection::EMD_ForwardLeft;
+//	}
+//}
