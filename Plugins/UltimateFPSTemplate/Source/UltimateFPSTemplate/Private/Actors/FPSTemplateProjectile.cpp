@@ -76,8 +76,8 @@ void AFPSTemplateProjectile::BeginPlay()
 	//Setup our velocity to be in cm/s and set our last location to the spawn location
 	VelocityFPS *= 30.48f;
 	//Calculate and set the velocity based on the velocity set by the user, then activate the projectile movement.
-	ProjectileMovementComponent->Velocity = GetActorForwardVector() * VelocityFPS;
-	ProjectileMovementComponent->Activate();
+	/*ProjectileMovementComponent->Velocity = GetActorForwardVector() * VelocityFPS;
+	ProjectileMovementComponent->Activate();*/
 
 	LastPosition = GetActorLocation();
 
@@ -104,7 +104,7 @@ float AFPSTemplateProjectile::CalculateDrag() const
 	if (DragCurve)
 	{	//get the information from our graph based on our projectiles velocity
 		const float ProjectileVelocity = ProjectileMovementComponent->Velocity.Size();
-		const float DragGraphValue = DragCurve->GetFloatValue(ProjectileVelocity * 0.01f);
+		const float DragGraphValue = DragCurve->GetFloatValue(GetGameTimeSinceCreation());
 
 		float Drag = -0.5f * DragGraphValue * 1.225f * 0.0000571f * (ProjectileVelocity * 0.01f) * (ProjectileVelocity * 0.01f);
 		Drag /= 3.56394f;
@@ -144,4 +144,10 @@ void AFPSTemplateProjectile::Tick(float DeltaTime)
 float AFPSTemplateProjectile::CalculateImpactForce() const
 {
 	return UKismetMathLibrary::NormalizeToRange(FMath::Sqrt(GetVelocity().Size() * BulletWeightGrains), 0.0f, 5000.0f);
+}
+
+void AFPSTemplateProjectile::ActivateProjectile(float VelocityMultiplier)
+{
+	ProjectileMovementComponent->Velocity = GetActorForwardVector() * (VelocityFPS * VelocityMultiplier);
+	ProjectileMovementComponent->Activate();
 }

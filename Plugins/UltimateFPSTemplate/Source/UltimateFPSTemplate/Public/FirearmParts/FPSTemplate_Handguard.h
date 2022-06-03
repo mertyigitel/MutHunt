@@ -21,13 +21,14 @@ public:
 	AFPSTemplate_Handguard();
 
 protected:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Sockets")
-	FName ForwardGripSocket;
+	/*UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Sockets")
+	FName ForwardGripSocket;*/
+	// Socket for the Left Hand IK (to position the left hand)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Sockets")
 	FName HandGripSocket;
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Sockets")
-	FString SightSocket;
-
+	/*UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Sockets")
+	FString SightSocket;*/
+	// Grip animation/pose to play for the left hand when this grip is in use. This is optional
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
 	UAnimSequence* GripAnimation;
 	
@@ -46,8 +47,6 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Animation")
 	FTransform GetGripTransform() const;
-
-	virtual FTransform GetAimSocketTransform() const override;
-
+	
 	virtual void CacheParts() override;
 };

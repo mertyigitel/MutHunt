@@ -14,6 +14,8 @@
 AFPSTemplate_LightLaserBase::AFPSTemplate_LightLaserBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	NetUpdateFrequency = 6.5f;
+	MinNetUpdateFrequency = 1.0f;
 
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("RootSceneComponent"));
 	RootComponent = Root;
@@ -29,6 +31,7 @@ AFPSTemplate_LightLaserBase::AFPSTemplate_LightLaserBase()
 	LaserDecalComponent->SetupAttachment(RootComponent);
 	LaserDecalComponent->SetVisibility(false);
 	LaserDecalComponent->DecalSize = FVector(3.0f, 3.0f, 3.0f);
+	LaserDecalComponent->FadeScreenSize = 0.0f;
 
 	SpotLightComponent->bUseInverseSquaredFalloff = false;
 	SpotLightComponent->Intensity = 2.0f;
@@ -41,6 +44,9 @@ AFPSTemplate_LightLaserBase::AFPSTemplate_LightLaserBase()
 	CollisionChannel = ECollisionChannel::ECC_Visibility;
 	MaxLaserDistance = 10000.0f;
 
+	LightPowerIntensityLevels = {SpotLightComponent->Intensity, 0.8f, 0.2f };
+	LightPowerIntensityIndex = 0;
+	
 	LaserSocket = FName("S_Laser");
 	AimSocket = FName("S_Aim");
 	
@@ -50,6 +56,7 @@ AFPSTemplate_LightLaserBase::AFPSTemplate_LightLaserBase()
 	PartType = EPartType::LightLaser;
 	
 	LaserColorIndex = 0;
+	LazerScaleMultiplier = 45.0f;
 }
 
 void AFPSTemplate_LightLaserBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -57,6 +64,7 @@ void AFPSTemplate_LightLaserBase::GetLifetimeReplicatedProps(TArray<FLifetimePro
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AFPSTemplate_LightLaserBase, bLightOn);
 	DOREPLIFETIME(AFPSTemplate_LightLaserBase, bLaserOn);
+	DOREPLIFETIME_CONDITION(AFPSTemplate_LightLaserBase, LightPowerIntensityIndex, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(AFPSTemplate_LightLaserBase, LaserColorIndex, COND_SkipOwner);
 }
 
@@ -91,8 +99,13 @@ void AFPSTemplate_LightLaserBase::Tick(float DeltaSeconds)
 					LaserDecalComponent->SetVisibility(true);
 					FRotator NormalizedRotator = UKismetMathLibrary::MakeRotFromX(HitResult.Normal);
 					LaserDecalComponent->SetWorldLocationAndRotation(HitResult.Location, NormalizedRotator);
+					float ScaleAmount = HitResult.Distance / 10000.0f * LazerScaleMultiplier;
+					ScaleAmount = FMath::Clamp(ScaleAmount, 3.0f, 25.0f);
+
+					LaserDecalComponent->DecalSize = FVector(ScaleAmount);
 				}
 				LaserMesh->SetWorldScale3D(FVector(1.0f, HitResult.Distance / 20.0f, 1.0f));
+				OnLaserScaleChanged(HitResult.Distance);
 			}
 			else
 			{
@@ -120,6 +133,10 @@ void AFPSTemplate_LightLaserBase::BeginPlay()
 	{
 		SetLaserColor(LaserColorIndex);
 	}
+	if (LightPowerIntensityLevels.Num())
+	{
+		SpotLightComponent->SetIntensity(LightPowerIntensityLevels[LightPowerIntensityIndex]);
+	}
 }
 
 void AFPSTemplate_LightLaserBase::SetupPartMesh()
@@ -131,6 +148,11 @@ void AFPSTemplate_LightLaserBase::SetupPartMesh()
 		SpotLightComponent->AttachToComponent(PartMesh.Get(), FAttachmentTransformRules::KeepRelativeTransform);
 		LaserDecalComponent->AttachToComponent(PartMesh.Get(), FAttachmentTransformRules::KeepRelativeTransform);
 	}
+}
+
+void AFPSTemplate_LightLaserBase::OnRep_LightPowerIntensityIndex()
+{
+	SpotLightComponent->SetIntensity(LightPowerIntensityLevels[LightPowerIntensityIndex]);
 }
 
 void AFPSTemplate_LightLaserBase::OnRep_LightOn()
@@ -223,6 +245,151 @@ void AFPSTemplate_LightLaserBase::ToggleLaser()
 	if (!HasAuthority())
 	{
 		Server_ToggleLaser();
+	}
+}
+
+bool AFPSTemplate_LightLaserBase::Server_ToggleLightAndLaser_Validate(bool bSync)
+{
+	return true;
+}
+
+void AFPSTemplate_LightLaserBase::Server_ToggleLightAndLaser_Implementation(bool bSync)
+{
+	ToggleLightAndLaser(bSync);
+}
+
+void AFPSTemplate_LightLaserBase::ToggleLightAndLaser(bool bSync)
+{
+	if (bSync)
+	{
+		bool ToggleValue;
+		if (bIsLight)
+		{
+			ToggleValue = !bLightOn;
+			bLightOn = ToggleValue;
+			OnRep_LightOn();
+			bLaserOn = ToggleValue;
+			OnRep_LaserOn();
+		}
+		else if (bIsLaser)
+		{
+			ToggleValue = !bLaserOn;
+			bLightOn = ToggleValue;
+			OnRep_LightOn();
+			bLaserOn = ToggleValue;
+			OnRep_LaserOn();
+		}
+	}
+	else
+	{
+		if (bIsLight)
+		{
+			bLightOn = !bLightOn;
+			OnRep_LightOn();
+		}
+	
+		if (bIsLaser)
+		{
+			bLaserOn = !bLaserOn;
+			OnRep_LaserOn();
+		}
+	}
+	
+	if (!HasAuthority())
+	{
+		Server_ToggleLightAndLaser(bSync);
+	}
+}
+
+bool AFPSTemplate_LightLaserBase::Server_CyclePowerModes_Validate(uint8 Index)
+{
+	return true;
+}
+
+void AFPSTemplate_LightLaserBase::Server_CyclePowerModes_Implementation(uint8 Index)
+{
+	SetPowerMode(Index);
+}
+
+void AFPSTemplate_LightLaserBase::CyclePowerModes()
+{
+	if (LightPowerIntensityLevels.Num() == 0)
+	{
+		return;
+	}
+
+	if (++LightPowerIntensityIndex > LightPowerIntensityLevels.Num() - 1)
+	{
+		LightPowerIntensityIndex = 0;
+	}
+
+	SetPowerMode(LightPowerIntensityIndex);
+
+	if (!HasAuthority())
+	{
+		Server_CyclePowerModes(LightPowerIntensityIndex);
+	}
+}
+
+void AFPSTemplate_LightLaserBase::SetPowerMode(uint8 Index)
+{
+	if (Index < LightPowerIntensityLevels.Num())
+	{
+		LightPowerIntensityIndex = Index;
+	}
+	SpotLightComponent->SetIntensity(LightPowerIntensityLevels[LightPowerIntensityIndex]);
+}
+
+void AFPSTemplate_LightLaserBase::CycleThroughModes()
+{
+	if (CycleModes.Num() == 0)
+	{
+		return;
+	}
+
+	switch (CycleModes[CycleModesIndex])
+	{
+	case ELightLaser::Laser :
+		if (!bLaserOn)
+		{
+			ToggleLaser();
+		}
+		if (bLightOn)
+		{
+			ToggleLight();
+		} break;
+	case ELightLaser::Light :
+		if (!bLightOn)
+		{
+			ToggleLight();
+		}
+		if (bLaserOn)
+		{
+			ToggleLaser();
+		} break;
+	case ELightLaser::Off :
+		if (bLaserOn)
+		{
+			ToggleLaser();
+		}
+		if (bLightOn)
+		{
+			ToggleLight();
+		} break;
+	case ELightLaser::Both :
+		if (!bLaserOn)
+		{
+			ToggleLaser();
+		}
+		if (!bLightOn)
+		{
+			ToggleLight();
+		} break;
+	}
+
+	if (++CycleModesIndex >= CycleModes.Num())
+	{
+		CycleModesIndex = 0;
 	}
 }
 

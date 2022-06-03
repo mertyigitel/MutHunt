@@ -3,14 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FirearmParts/BaseClasses/FPSTemplate_SightMagnifiedRTBase.h"
+#include "FirearmParts/BaseClasses/FPSTemplate_SightBase.h"
 #include "FPSTemplateDataTypes.h"
 #include "FPSTemplate_RangeFinder.generated.h"
 
 class UTextRenderComponent;
 
 UCLASS()
-class ULTIMATEFPSTEMPLATE_API AFPSTemplate_RangeFinder : public AFPSTemplate_SightMagnifiedRTBase
+class ULTIMATEFPSTEMPLATE_API AFPSTemplate_RangeFinder : public AFPSTemplate_SightBase
 {
 	GENERATED_BODY()
 public:
@@ -19,6 +19,10 @@ public:
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | RangeFinder")
 	FName RangeFinderLaserSocket;
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | RangeFinder")
+	bool bAutoMeasure;
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | RangeFinder", meta = (EditCondition = "bAutoMeasure"))
+	float MeasureRate;
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | RangeFinder")
 	float MaxDistance;
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | RangeFinder")
@@ -38,6 +42,7 @@ protected:
 	float UnitTypeConverter;
 	
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPartMesh() override;
 	
 	void RestoreRange();
@@ -54,5 +59,5 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | RangeFinder")
 	void ClearMeasure();
 
-	virtual void DisableRenderTargets(bool Disable) override;
+	virtual void DisableRenderTargets_Implementation(bool Disable) override;
 };

@@ -20,25 +20,30 @@ UFPSTemplate_CharacterComponent::UFPSTemplate_CharacterComponent()
 	SetIsReplicatedByDefault(true);
 	
 	FirearmCollisionChannel = ECC_GameTraceChannel2;
+
+	bAutoSetOwnerOnEquipFirearmAndAimingActor = true;
 	
 	bIsInitialized = false;
 	bLocallyControlled = false;
 	
 	MovementComponentSprintSpeed = 350.0f;
+	bForceIntoSprintPose = false;
 	MaxLookUpAngle = 80.0f;
 	MaxLookDownAngle = 80.0f;
 	DefaultLeanAngle = 35.0f;
+	MaxCrouchDepth = 30.0f;
+	CrouchDepthIncrement = 2.5f;
 	LeanAngle = DefaultLeanAngle;
 	DefaultCameraFOV = 90.0f;
 	
 	CameraSocket = FName("Camera");
-	CameraSocketParentBone = FName("cc_Camera");
-
+	CameraSocketParentBone = FName("head");
+	RightHandAxis = EAxis::Type::Y;
+	
 	MaxFirearmAttachmentAttempts = 5;
 	FirearmReAttachmentAttemptInterval = 0.5f;
 	AttachmentAttempt = 0;
 
-	bLeftHandFollowIK = true;
 	bUseLeftHandIK = true;
 
 	bFreeLook = false;
@@ -51,6 +56,17 @@ UFPSTemplate_CharacterComponent::UFPSTemplate_CharacterComponent()
 	FirearmCollisionDistanceCheck = 12.0f;
 
 	ControlYaw = 0.0f;
+
+	bIsThirdPersonDefault = false;
+	bInThirdPerson = bIsThirdPersonDefault;
+
+	CrouchHeight = 0.0f;
+
+	DefaultLeanSpeed = 10.0f;
+	LeanSpeed = DefaultLeanSpeed;
+	IncrementalLeanAngle = 0.0f;
+	bIsIncrementalLeaning = false;
+	IncrementalLeanAmount = 2.5;
 }
 
 void UFPSTemplate_CharacterComponent::BeginPlay()
@@ -69,10 +85,12 @@ void UFPSTemplate_CharacterComponent::BeginPlay()
 void UFPSTemplate_CharacterComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(UFPSTemplate_CharacterComponent, CurrentFirearm);
+	//DOREPLIFETIME(UFPSTemplate_CharacterComponent, CurrentFirearm);
 	DOREPLIFETIME(UFPSTemplate_CharacterComponent, AimingActor);
-	DOREPLIFETIME(UFPSTemplate_CharacterComponent, LeanAngle);
-	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, bLeftHandFollowIK, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, LeanAngle, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, LeanSpeed, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, IncrementalLeanAngle, COND_SkipOwner);
+	DOREPLIFETIME(UFPSTemplate_CharacterComponent, CrouchHeight);
 	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, bUseLeftHandIK, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, bIsAiming, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(UFPSTemplate_CharacterComponent, CurrentLean, COND_SkipOwner);
@@ -95,9 +113,8 @@ void UFPSTemplate_CharacterComponent::TickComponent(float DeltaTime, ELevelTick 
 	{
 		FVector Start = FPCameraComponent->GetComponentLocation();
 		FVector Muzzle = CurrentFirearm->GetMuzzleSocketTransform().GetLocation();
-		
 		FRotator Rotation = FPCameraComponent->GetComponentRotation();
-		Rotation.Yaw = ControlYaw;
+
 		if (!bIsAiming)
 		{
 			Rotation.Yaw += 8.0f;
@@ -109,7 +126,7 @@ void UFPSTemplate_CharacterComponent::TickComponent(float DeltaTime, ELevelTick 
 		FHitResult HitResult;		
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(GetOwner());
-		
+
 		if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, FirearmCollisionChannel, Params))
 		{
 			float HitDistance = HitResult.Distance - DistanceToMuzzle;
@@ -154,10 +171,10 @@ void UFPSTemplate_CharacterComponent::TickComponent(float DeltaTime, ELevelTick 
 	}
 }
 
-void UFPSTemplate_CharacterComponent::Init(UCameraComponent* CameraComponent, bool bAutoAttach, USkeletalMeshComponent* FirstPersonMesh,
-	USkeletalMeshComponent* ThirdPersonMesh)
+void UFPSTemplate_CharacterComponent::Init(UCameraComponent* CameraComponent, bool bAutoAttach, USkeletalMeshComponent* FirstPersonMesh, USkeletalMeshComponent* ThirdPersonMesh)
 {
 	LeanAngle = DefaultLeanAngle;
+	LeanSpeed = DefaultLeanSpeed;
 	FPCameraComponent = CameraComponent;
 	FPMesh = FirstPersonMesh;
 	TPMesh = ThirdPersonMesh;
@@ -203,6 +220,14 @@ void UFPSTemplate_CharacterComponent::Init(UCameraComponent* CameraComponent, bo
 			}
 		}
 	}
+
+	if (USkeletalMeshComponent* InUseMesh = GetInUseMesh())
+	{
+		StartMeshLocation = InUseMesh->GetRelativeLocation();
+		StartMeshLocation.Z -= CrouchHeight;
+	}
+
+	bInThirdPerson = bIsThirdPersonDefault;
 	
 	bIsInitialized = true;
 }
@@ -219,12 +244,12 @@ void UFPSTemplate_CharacterComponent::Server_SetPortPose_Implementation(EPortPos
 	OnRep_PortPose();
 }
 
-void UFPSTemplate_CharacterComponent::SetHighPortPose()
+void UFPSTemplate_CharacterComponent::SetHighPortPose(bool bSkipNone)
 {
 	if (!bFirearmCollisionHitting)
 	{
 		bHighPort = true;
-		if (PortPose == EPortPose::Low)
+		if (PortPose == EPortPose::Low && !bSkipNone)
 		{
 			PortPose = EPortPose::None;
 		}
@@ -241,12 +266,12 @@ void UFPSTemplate_CharacterComponent::SetHighPortPose()
 	}
 }
 
-void UFPSTemplate_CharacterComponent::SetLowPortPose()
+void UFPSTemplate_CharacterComponent::SetLowPortPose(bool bSkipNone)
 {
 	if (!bFirearmCollisionHitting)
 	{
 		bLowPort = true;
-		if (PortPose == EPortPose::High)
+		if (PortPose == EPortPose::High && !bSkipNone)
 		{
 			PortPose = EPortPose::None;
 		}
@@ -385,6 +410,84 @@ void UFPSTemplate_CharacterComponent::SetControlRotation(FRotator NewControlRota
 	}
 }
 
+void UFPSTemplate_CharacterComponent::OnRep_CrouchHeight()
+{
+	/*if (USkeletalMeshComponent* Mesh = GetInUseMesh())
+	{
+		FVector MeshLocation = StartMeshLocation;
+		MeshLocation.Z += CrouchHeight;
+		GetAnimationInstance()->InterpolateCrouch(StartMeshLocation, CrouchHeight);
+	}*/
+	GetAnimationInstance()->InterpolateCrouch(StartMeshLocation, CrouchHeight);
+}
+
+bool UFPSTemplate_CharacterComponent::Server_CrouchHeight_Validate(float NewHeight)
+{
+	return true;
+}
+
+void UFPSTemplate_CharacterComponent::Server_CrouchHeight_Implementation(float NewHeight)
+{
+	if (NewHeight >= -MaxCrouchDepth && NewHeight <= 0.0f)
+	{
+		CrouchHeight = NewHeight;
+		if (CrouchHeight < -MaxCrouchDepth)
+		{
+			CrouchHeight = -MaxCrouchDepth;
+		}
+		else if (CrouchHeight > 0.0f)
+		{
+			CrouchHeight = 0.0f;
+		}
+		OnRep_CrouchHeight();
+	}
+}
+
+void UFPSTemplate_CharacterComponent::CrouchIncrement(bool Down)
+{
+	if (Down)
+	{
+		CrouchHeight -= CrouchDepthIncrement;
+		if (CrouchHeight < -MaxCrouchDepth)
+		{
+			CrouchHeight = -MaxCrouchDepth;
+		}
+	}
+	else
+	{
+		CrouchHeight += CrouchDepthIncrement;
+		if (CrouchHeight > 0.0f)
+		{
+			CrouchHeight = 0.0f;
+		}
+	}
+	Server_CrouchHeight(CrouchHeight);
+	OnRep_CrouchHeight();
+}
+
+void UFPSTemplate_CharacterComponent::GoToCrouch()
+{
+	CrouchHeight = -MaxCrouchDepth;
+	Server_CrouchHeight(CrouchHeight);
+	OnRep_CrouchHeight();
+}
+
+void UFPSTemplate_CharacterComponent::GoToStanding()
+{
+	CrouchHeight = 0.0f;
+	Server_CrouchHeight(CrouchHeight);
+	OnRep_CrouchHeight();
+}
+
+AFPSTemplate_SightBase* UFPSTemplate_CharacterComponent::GetCurrentSight() const
+{
+	if (IsValid(CurrentFirearm))
+	{
+		return CurrentFirearm->GetCurrentSight();
+	}
+	return nullptr;
+}
+
 void UFPSTemplate_CharacterComponent::OnRep_PortPose() const
 {
 	if (AnimationInstance.IsValid())
@@ -393,23 +496,29 @@ void UFPSTemplate_CharacterComponent::OnRep_PortPose() const
 	}
 }
 
-void UFPSTemplate_CharacterComponent::OnRep_IsAiming() const
+void UFPSTemplate_CharacterComponent::OnRep_IsAiming()
 {
 	if (AnimationInstance.IsValid())
 	{
+		if (bIsAiming)
+		{
+			StopHighAndLowPortPose();
+		}
 		AnimationInstance->SetIsAiming(bIsAiming);
 	}
 }
 
-void UFPSTemplate_CharacterComponent::OnRep_CurrentFirearm()
+/*void UFPSTemplate_CharacterComponent::OnRep_CurrentFirearm()
 {
 	if (IsValid(CurrentFirearm))
 	{
 		CurrentFirearm->SetCharacterComponent(this);
+		CurrentFirearm->SetupStabilizerComponent();
+		CurrentFirearm->Equip();
 		SetAimingActor(CurrentFirearm);
 		AttachItem(CurrentFirearm, CurrentFirearm->GetFirearmGripSocket());
 	}
-}
+}*/
 
 void UFPSTemplate_CharacterComponent::AttachItem(AActor* Actor, const FName SocketName)
 {
@@ -452,6 +561,7 @@ void UFPSTemplate_CharacterComponent::Server_ClearCurrentFirearm_Implementation(
 void UFPSTemplate_CharacterComponent::ClearCurrentFirearm()
 {
 	CurrentFirearm = nullptr;
+	AimingActor = nullptr;
 	if (!HasAuthority())
 	{
 		Server_ClearCurrentFirearm();
@@ -464,31 +574,56 @@ void UFPSTemplate_CharacterComponent::EquipFirearm(AFPSTemplateFirearm* Firearm)
 	{
 		CurrentFirearm->SetCharacterComponent(nullptr);
 	}
+	if (bAutoSetOwnerOnEquipFirearmAndAimingActor && HasAuthority() && GetOwner() && Firearm)
+	{
+		Firearm->SetOwner(GetOwner());
+	}
 	CurrentFirearm = Firearm;
-	OnRep_CurrentFirearm();
+	AimingActor = CurrentFirearm;
+	OnRep_AimingActor();
+}
+
+void UFPSTemplate_CharacterComponent::SetAimingActor(AActor* Actor)
+{
+	if (bAutoSetOwnerOnEquipFirearmAndAimingActor && HasAuthority() && GetOwner() && Actor)
+	{
+		Actor->SetOwner(GetOwner());
+	}
+	AimingActor = Actor;
+	OnRep_AimingActor();
 }
 
 void UFPSTemplate_CharacterComponent::OnRep_AimingActor()
 {
-	if (const IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
+	if (IsValid(AimingActor))
 	{
-		AttachItem(AimingActor, AimInterface->GetGripSocketName());
+		if (AFPSTemplateFirearm* Firearm = Cast<AFPSTemplateFirearm>(AimingActor))
+		{
+			CurrentFirearm = Firearm;
+			CurrentFirearm->SetCharacterComponent(this);
+			CurrentFirearm->SetupStabilizerComponent();
+			CurrentFirearm->Equip();
+			//SetAimingActor(CurrentFirearm);
+			//AttachItem(CurrentFirearm, CurrentFirearm->GetFirearmGripSocket());
+		}
+		if (AimingActor->Implements<UFPSTemplate_AimInterface>())
+		{
+			AttachItem(AimingActor, IFPSTemplate_AimInterface::Execute_GetGripSocketName(AimingActor));
+		}
+	}
+	else
+	{
+		CurrentFirearm = nullptr;
 	}
 }
 
-void UFPSTemplate_CharacterComponent::OnRep_Lean() const
+void UFPSTemplate_CharacterComponent::OnRep_Lean()
 {
+	bIsIncrementalLeaning = false;
+
 	if (AnimationInstance.IsValid())
 	{
 		AnimationInstance->SetLeaning(CurrentLean);
-	}
-}
-
-void UFPSTemplate_CharacterComponent::OnRep_LeftHandFollowIK() const
-{
-	if (AnimationInstance.IsValid())
-	{
-		AnimationInstance->SetLeftHandFollow(bLeftHandFollowIK);
 	}
 }
 
@@ -575,10 +710,100 @@ void UFPSTemplate_CharacterComponent::SetLeanAngle(float NewLeanAngle)
 void UFPSTemplate_CharacterComponent::ResetLeanAngle()
 {
 	LeanAngle = DefaultLeanAngle;
+	bIsIncrementalLeaning = false;
+	IncrementalLeanAngle = 0.0f;
 	OnRep_Lean();
 	if (!HasAuthority())
 	{
 		Server_SetLeanAngle(LeanAngle);
+	}
+}
+
+bool UFPSTemplate_CharacterComponent::Server_SetLeanSpeed_Validate(float NewLeanSpeed)
+{
+	return true;
+}
+
+void UFPSTemplate_CharacterComponent::Server_SetLeanSpeed_Implementation(float NewLeanSpeed)
+{
+	SetLeanSpeed(NewLeanSpeed);
+}
+
+void UFPSTemplate_CharacterComponent::SetLeanSpeed(float NewLeanSpeed)
+{
+	LeanSpeed = NewLeanSpeed > 0.0f ? LeanSpeed = NewLeanSpeed : LeanSpeed = DefaultLeanSpeed;
+	if (!HasAuthority())
+	{
+		Server_SetLeanSpeed(LeanSpeed);
+	}
+}
+
+void UFPSTemplate_CharacterComponent::ResetLeanSpeed()
+{
+	LeanSpeed = DefaultLeanSpeed;
+	if (!HasAuthority())
+	{
+		Server_SetLeanSpeed(LeanSpeed);
+	}
+}
+
+void UFPSTemplate_CharacterComponent::OnRep_IncrementalLeanAngle()
+{
+	if (AnimationInstance.IsValid())
+	{
+		bIsIncrementalLeaning = LeanAngle != 0.0f;
+		
+		AnimationInstance->SetLeaning(CurrentLean);
+	}
+}
+
+bool UFPSTemplate_CharacterComponent::Server_SetLeanIncremental_Validate(float LeanAmount)
+{
+	return true;
+}
+
+void UFPSTemplate_CharacterComponent::Server_SetLeanIncremental_Implementation(float LeanAmount)
+{
+	IncrementalLeanAngle = LeanAmount;
+	
+	if (IncrementalLeanAngle > LeanAngle)
+	{
+		IncrementalLeanAngle = LeanAngle;
+	}
+	else if (IncrementalLeanAngle < -LeanAngle)
+	{
+		IncrementalLeanAngle = -LeanAngle;
+	}
+	
+	OnRep_IncrementalLeanAngle();
+}
+
+void UFPSTemplate_CharacterComponent::IncrementalLean(ELeaning LeanDirection)
+{
+	if (!bIsIncrementalLeaning)
+	{
+		IncrementalLeanAngle = 0.0f;
+	}
+	switch (LeanDirection)
+	{
+	case ELeaning::Left: IncrementalLeanAngle -= IncrementalLeanAmount;  break;
+	case ELeaning::Right: IncrementalLeanAngle += IncrementalLeanAmount; break;
+	case ELeaning::None: ResetLeanAngle();
+	}
+	
+	if (IncrementalLeanAngle > LeanAngle)
+	{
+		IncrementalLeanAngle = LeanAngle;
+	}
+	else if (IncrementalLeanAngle < -LeanAngle)
+	{
+		IncrementalLeanAngle = -LeanAngle;
+	}
+	
+	OnRep_IncrementalLeanAngle();
+	if (!HasAuthority())
+	{
+		Server_SetLeanIncremental(IncrementalLeanAngle);
 	}
 }
 
@@ -631,6 +856,11 @@ void UFPSTemplate_CharacterComponent::RagdollCharacterWithForce(const FVector Im
 	UFPSTemplateStatics::RagdollWithImpact(TPMesh, ImpactLocation, ImpactForce);
 }
 
+void UFPSTemplate_CharacterComponent::SetThirdPersonView(bool bThirdPerson)
+{
+	bInThirdPerson = bThirdPerson;
+}
+
 void UFPSTemplate_CharacterComponent::LeanLeft()
 {
 	bLeanLeftDown = true;
@@ -642,7 +872,8 @@ void UFPSTemplate_CharacterComponent::LeanLeft()
 	{
 		CurrentLean = ELeaning::Left;
 	}
-	
+	bIsIncrementalLeaning = false;
+	//IncrementalLeanAngle = 0.0f;
 	if (AnimationInstance.IsValid())
 	{
 		AnimationInstance->SetLeaning(CurrentLean);
@@ -664,7 +895,8 @@ void UFPSTemplate_CharacterComponent::LeanRight()
 	{
 		CurrentLean = ELeaning::Right;
 	}
-
+	bIsIncrementalLeaning = false;
+	//IncrementalLeanAngle = 0.0f;
 	if (AnimationInstance.IsValid())
 	{
 		AnimationInstance->SetLeaning(CurrentLean);
@@ -730,29 +962,6 @@ void UFPSTemplate_CharacterComponent::Server_SetLean_Implementation(ELeaning Lea
 	OnRep_Lean();
 }
 
-bool UFPSTemplate_CharacterComponent::Server_SetLeftHandFollowIK_Validate(bool bFollow)
-{
-	return true;
-}
-
-void UFPSTemplate_CharacterComponent::Server_SetLeftHandFollowIK_Implementation(bool bFollow)
-{
-	SetLeftHandFollowIK(bFollow);
-}
-
-void UFPSTemplate_CharacterComponent::SetLeftHandFollowIK(bool bFollow)
-{
-	if (bLeftHandFollowIK != bFollow)
-	{
-		bLeftHandFollowIK = bFollow;
-		OnRep_LeftHandFollowIK();
-		if (!HasAuthority())
-		{
-			Server_SetLeftHandFollowIK(bLeftHandFollowIK);
-		}
-	}
-}
-
 bool UFPSTemplate_CharacterComponent::Server_SetUseLeftHandIK_Validate(bool bUse)
 {
 	return true;
@@ -791,9 +1000,9 @@ float UFPSTemplate_CharacterComponent::GetMagnificationSensitivity() const
 {
 	if (bIsAiming)
 	{
-		if (const IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
+		if (AimingActor->Implements<UFPSTemplate_AimInterface>())
 		{
-			return 1.0f / AimInterface->GetCurrentMagnification();
+			return 1.0f / IFPSTemplate_AimInterface::Execute_GetCurrentMagnification(AimingActor);
 		}
 	}
 	return 1.0f;
@@ -803,11 +1012,11 @@ float UFPSTemplate_CharacterComponent::GetMagnificationSensitivityStartValue(flo
 {
 	if (bIsAiming)
 	{
-		if (const IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
+		if (AimingActor->Implements<UFPSTemplate_AimInterface>())
 		{
-			if (AimInterface->GetCurrentMagnification() > StartAtMagnification)
+			if (IFPSTemplate_AimInterface::Execute_GetCurrentMagnification(AimingActor) > StartAtMagnification)
 			{
-				return 1.0f / CurrentFirearm->GetOpticMagnification();
+				return 1.0f / IFPSTemplate_AimInterface::Execute_GetCurrentMagnification(AimingActor);
 			}
 		}
 	}
@@ -816,15 +1025,24 @@ float UFPSTemplate_CharacterComponent::GetMagnificationSensitivityStartValue(flo
 
 void UFPSTemplate_CharacterComponent::StartAiming()
 {
-	if (bFirearmCollisionHitting)
+	if (bFirearmCollisionHitting || !IsValid(AimingActor))
 	{
 		return;
 	}
+
+	StopHighAndLowPortPose();
 	
 	bIsAiming = true;
-	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
+	if (AimingActor->Implements<UFPSTemplate_AimInterface>())
 	{
-		AimInterface->DisableRenderTargets(false);
+		if (IsValid(CurrentFirearm))
+		{
+			CurrentFirearm->ActivateCurrentSight(true);
+		}
+		else
+		{
+			IFPSTemplate_AimInterface::Execute_DisableRenderTargets(AimingActor, false);
+		}
 	}
 	if (AnimationInstance.IsValid())
 	{
@@ -838,18 +1056,28 @@ void UFPSTemplate_CharacterComponent::StartAiming()
 
 void UFPSTemplate_CharacterComponent::StopAiming()
 {
-	bIsAiming = false;
-	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
+	if (IsValid(AimingActor))
 	{
-		AimInterface->DisableRenderTargets(true);
-	}
-	if (AnimationInstance.IsValid())
-	{
-		AnimationInstance->SetIsAiming(bIsAiming);
-	}
-	if (!HasAuthority())
-	{
-		Server_SetAiming(bIsAiming);
+		bIsAiming = false;
+		if (AimingActor->Implements<UFPSTemplate_AimInterface>())
+		{
+			if (IsValid(CurrentFirearm))
+			{
+				CurrentFirearm->ActivateCurrentSight(false);
+			}
+			else
+			{
+				IFPSTemplate_AimInterface::Execute_DisableRenderTargets(AimingActor, true);
+			}
+		}
+		if (AnimationInstance.IsValid())
+		{
+			AnimationInstance->SetIsAiming(bIsAiming);
+		}
+		if (!HasAuthority())
+		{
+			Server_SetAiming(bIsAiming);
+		}
 	}
 }
 

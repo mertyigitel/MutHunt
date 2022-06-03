@@ -6,8 +6,9 @@
 
 AFPSTemplate_RangeFinder::AFPSTemplate_RangeFinder()
 {
-	MagnificationSettings.Magnifications = {6.0f};
-
+	PrimaryActorTick.bCanEverTick = true;
+	MeasureRate = 2.0f;
+	bAutoMeasure = false;
 	MaxDistance = 999.0f;
 	MinDistance = 8.0f;
 	UnitType = EMeasurementType::Metric;
@@ -26,6 +27,18 @@ void AFPSTemplate_RangeFinder::BeginPlay()
 		UnitTypeConverter = 91.44f;
 	}
 	SetRangeByValue(0.0f);
+	SetActorTickEnabled(false);
+	if (bAutoMeasure)
+	{
+		SetActorTickInterval(1.0f / MeasureRate);
+		SetActorTickEnabled(true);
+	}
+}
+
+void AFPSTemplate_RangeFinder::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	Measure();
 }
 
 void AFPSTemplate_RangeFinder::SetupPartMesh()
@@ -87,7 +100,6 @@ float AFPSTemplate_RangeFinder::Measure()
 	{	// Perform Line Trace for Distance
 		FVector Start = PartMesh->GetSocketLocation(RangeFinderLaserSocket);
 		FVector End = Start + PartMesh->GetSocketRotation(RangeFinderLaserSocket).Vector() * (MaxDistance * UnitTypeConverter);
-		
 		FHitResult HitResult;
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(this);
@@ -121,7 +133,7 @@ void AFPSTemplate_RangeFinder::RestoreRange()
 	}
 }
 
-void AFPSTemplate_RangeFinder::DisableRenderTargets(bool bDisable)
+void AFPSTemplate_RangeFinder::DisableRenderTargets_Implementation(bool bDisable)
 {
 	Super::DisableRenderTarget(bDisable);
 	if (bDisable)

@@ -35,7 +35,7 @@
 		{
 			"Name": "UltimateFPSTemplate",
 			"Enabled": true,
-			"MarketplaceURL": "https://online-leaks.com/"
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/4986d4f5b73148deb154e1cd31dd9623"
 		}
 	]
 }

@@ -14,15 +14,16 @@ AFPSTemplate_Handguard::AFPSTemplate_Handguard()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
+	NetUpdateFrequency = 1.0f;
 
 	PartStats.Weight = 1.0f;
 	PartStats.ErgonomicsChangePercentage = 5.0f;
 
 	PartType = EPartType::Handguard;
 	
-	ForwardGripSocket = FName("S_ForwardGrip");
+	//ForwardGripSocket = FName("S_ForwardGrip");
 	HandGripSocket = FName("S_LeftHandIK");
-	SightSocket = FString("S_Sight");
+	//SightSocket = FString("S_Sight");
 }
 
 // Called when the game starts or when spawned
@@ -54,11 +55,6 @@ FTransform AFPSTemplate_Handguard::GetGripTransform() const
 	}
 	
 	return PartMesh.IsValid() ? PartMesh->GetSocketTransform(HandGripSocket) : FTransform();
-}
-
-FTransform AFPSTemplate_Handguard::GetAimSocketTransform() const
-{
-	return PartMesh.IsValid() ? PartMesh->GetSocketTransform(AimSocket) : FTransform();
 }
 
 void AFPSTemplate_Handguard::CacheParts()

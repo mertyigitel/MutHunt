@@ -74,4 +74,6 @@ public:
 	float CalculateImpactForce() const;
 	UFUNCTION(BlueprintPure, Category = "FPSTemplate | Ammo")
 	float GetProjectilePower() const { return FMath::Sqrt(VelocityFPS * BulletWeightGrains); }
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Ammo")
+	void ActivateProjectile(float VelocityMultiplier);
 };

@@ -1,7 +1,5 @@
 //Copyright 2021, Dakota Dawe, All rights reserved
 
-// ASSET LEAK FROM https://online-leaks.com
-
 #include "FPSTemplateAnimInstance.h"
 
 #include "Actors/FPSTemplateFirearm.h"
@@ -19,6 +17,9 @@ UFPSTemplateAnimInstance::UFPSTemplateAnimInstance()
 	CycleSightsInterpolationSpeed = 20.0f;
 	RotationLagResetInterpolationSpeed = 20.0f;
 	MotionLagResetInterpolationSpeed = 20.0f;
+
+	bUseBasePoseCorrection = false;
+	BasePoseCorrectionBlend = 0.45f;
 
 	bUseProceduralSpine = true;
 	bUseLeftHandIK = true;
@@ -46,9 +47,7 @@ UFPSTemplateAnimInstance::UFPSTemplateAnimInstance()
 	bValidLeftHandPose = false;
 	bInvertRotationLag = false;
 	bSprinting = false;
-
-	MakeLeftHandFollowAlpha = 1.0f;
-
+	
 	SwayMultiplier = 1.0f;
 
 	bIsLocallyControlled = false;
@@ -62,6 +61,19 @@ UFPSTemplateAnimInstance::UFPSTemplateAnimInstance()
 	ShakeCurveAlpha = 0.0f;
 
 	CustomPoseAlpha = 0.0f;
+
+	CustomCurveStartTime = 0.0f;
+	CustomCurveAlpha = 0.0f;
+	bInterpCustomCurve = false;
+
+	CrouchInterpSpeed = 10.0f;
+	LeftFootBone = FName("foot_l");
+	RightFootBone = FName("foot_r");
+	bInterpCrouch = false;
+	CrouchHeightInterpTo = 0.0f;
+	MeshStartLocation = FVector::ZeroVector;
+	
+	bEnableProceduralCrouch = false;
 }
 
 void UFPSTemplateAnimInstance::NativeBeginPlay()
@@ -71,7 +83,7 @@ void UFPSTemplateAnimInstance::NativeBeginPlay()
 	if (const AActor* OwningActor = GetOwningActor())
 	{
 		CharacterComponent = Cast<UFPSTemplate_CharacterComponent>(OwningActor->GetComponentByClass(TSubclassOf<UFPSTemplate_CharacterComponent>()));
-		if (CharacterComponent)
+		if (IsValid(CharacterComponent))
 		{
 			bIsLocallyControlled = CharacterComponent->IsLocallyControlled();
 		}
@@ -87,15 +99,15 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	FVector Velocity = CharacterComponent->GetMovementComponent()->Velocity;
 	Velocity.Z = 0.0f;
 	CharacterVelocity = Velocity.Size();
-	//CharacterDirection = CalculateDirection(Velocity, CharacterComponent->GetOwner()->GetActorRotation());
+	CharacterDirection = CalculateDirection(Velocity, CharacterComponent->GetOwner()->GetActorRotation());
 	
 	IsLocallyControlled();
 	AimingActor = CharacterComponent->GetAimingActor();
 
-	if (AimingActor)
+	if (IsValid(AimingActor))
 	{
 		Firearm = Cast<AFPSTemplateFirearm>(AimingActor);
-		if (Firearm)
+		if (IsValid(Firearm))
 		{
 			BasePoseOffsetLocation = Firearm->GetBasePoseOffset().GetLocation();
 			BasePoseOffsetRotation = Firearm->GetBasePoseOffset().Rotator();
@@ -112,7 +124,7 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 					bValidLeftHandPose = false;
 				}
 			
-				if (Firearm->UseLeftHandIK())
+				if (CharacterComponent->GetUseLeftHandIK() && Firearm->UseLeftHandIK())
 				{
 					SetLeftHandIK();
 				}
@@ -170,6 +182,11 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		{
 			InterpShakeCurve(DeltaSeconds);
 		}
+
+		if (bInterpCustomCurve)
+		{
+			InterpCustomCurve(DeltaSeconds);
+		}
 	}
 	else
 	{
@@ -184,6 +201,7 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			SpineToInterpTo = UKismetMathLibrary::NormalizedDeltaRotator(SpineToInterpTo, TryGetPawnOwner()->GetActorRotation());
 			SpineToInterpTo.Roll = SpineToInterpTo.Pitch * -1.0f;
 			SpineToInterpTo.Pitch = 0.0f;
+			SpineToInterpTo.Yaw = 0.0f;
 			SpineRotation = UKismetMathLibrary::RInterpTo(SpineRotation, SpineToInterpTo, DeltaSeconds, 10.0f);
 		}
 		else
@@ -201,11 +219,16 @@ void UFPSTemplateAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			InterpLeaning(DeltaSeconds);
 		}
 	}
+
+	if (bEnableProceduralCrouch && bInterpCrouch)
+	{
+		InterpToNewCrouch(DeltaSeconds);
+	}
 }
 
 void UFPSTemplateAnimInstance::SetFreeLook(bool FreeLook)
 {
-	if (CharacterComponent)
+	if (IsValid(CharacterComponent))
 	{
 		bFreeLook = FreeLook;
 		if (bFreeLook)
@@ -219,15 +242,42 @@ void UFPSTemplateAnimInstance::SetFreeLook(bool FreeLook)
 	}
 }
 
+void UFPSTemplateAnimInstance::InterpToNewCrouch(float DeltaSeconds)
+{
+	if (USkeletalMeshComponent* Mesh = CharacterComponent->GetInUseMesh())
+	{
+		FVector MeshLocation = MeshStartLocation;
+		MeshLocation.Z += UKismetMathLibrary::FInterpTo(CurrentCrouchHeight, CrouchHeightInterpTo, DeltaSeconds, CrouchInterpSpeed);
+		CurrentCrouchHeight = MeshLocation.Z;
+		Mesh->SetRelativeLocation(MeshLocation);
+		if (MeshLocation.Z == CrouchHeightInterpTo)
+		{
+			bInterpCrouch = false;
+		}
+	}
+	else
+	{
+		bInterpCrouch = false;
+	}
+}
+
+void UFPSTemplateAnimInstance::InterpolateCrouch(FVector MeshStartingLocation, float NewCrouchHeight)
+{
+	MeshStartLocation = MeshStartingLocation;
+	CrouchHeightInterpTo = NewCrouchHeight;
+	bInterpCrouch = true;
+}
+
 void UFPSTemplateAnimInstance::InterpRelativeToHand(float DeltaSeconds)
 {
 	// Change InterpSpeed to weight of firearm
 	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
 	{
-		AnimationIndex = AimInterface->GetAnimationIndex();
-	
+		AnimationIndex = IFPSTemplate_AimInterface::Execute_GetAnimationIndex(AimingActor);
+		AnimationGameplayTag = IFPSTemplate_AimInterface::Execute_GetAnimationGameplayTag(AimingActor);
+		
 		float InterpSpeed = AimInterpolationSpeed;
-		float Multiplier = AimInterface->GetAimInterpolationMultiplier();
+		float Multiplier = IFPSTemplate_AimInterface::Execute_GetAimInterpolationMultiplier(AimingActor);
 		Multiplier = UKismetMathLibrary::NormalizeToRange(Multiplier, -40.0f, 150.0f);
 		Multiplier = FMath::Clamp(Multiplier, 0.0f, 1.0f);
 		InterpSpeed *= Multiplier;
@@ -239,11 +289,12 @@ void UFPSTemplateAnimInstance::InterpRelativeToHand(float DeltaSeconds)
 		
 		float HandToSightDistance = FinalRelativeHand.GetLocation().X;
 		bool UseFixedCameraDistance = false;
-		if (CharacterComponent->IsLocallyControlled())
+		if (CharacterComponent->IsLocallyControlled() && !CharacterComponent->IsInThirdPerson())
 		{
-			const FAimCameraSettings CameraSettings = AimInterface->GetCameraSettings();
+			FAimCameraSettings CameraSettings;
+			IFPSTemplate_AimInterface::Execute_GetCameraSettings(AimingActor, CameraSettings);
 			UseFixedCameraDistance = CameraSettings.bUsedFixedCameraDistance;
-			if (UseFixedCameraDistance)
+			if (CameraSettings.bUsedFixedCameraDistance)
 			{
 				HandToSightDistance = CameraSettings.CameraDistance;
 			}
@@ -255,7 +306,7 @@ void UFPSTemplateAnimInstance::InterpRelativeToHand(float DeltaSeconds)
 
 		if (!UseFixedCameraDistance && IsValid(Firearm))
 		{
-			HandToSightDistance -= Firearm->GetStockLengthOfPull() / 2.0f;
+			HandToSightDistance += Firearm->GetStockLengthOfPull() / 2.0f;
 		}
 		SightDistance = UKismetMathLibrary::FInterpTo(SightDistance, HandToSightDistance * -1.0f, DeltaSeconds, InterpSpeed);
 		SetSightTransform();
@@ -301,9 +352,16 @@ void UFPSTemplateAnimInstance::SetSightTransform()
 	CameraTransform.SetRotation(NewRot.Quaternion());
 	
 	FVector CameraVector = CameraTransform.GetLocation();
-	CameraVector.Y += SightDistance + 10.0f;
+	const float AdditiveDistance = SightDistance + 10.0f;
+	switch (CharacterComponent->GetRightHandAxis())
+	{
+	case EAxis::Type::Y : CameraVector.Y += AdditiveDistance; break;
+	case EAxis::Type::Z : CameraVector.Z += AdditiveDistance; break;
+	case EAxis::Type::X : CameraVector.X += AdditiveDistance; break;
+	case EAxis::Type::None : break;
+	}
 
-	if (!CharacterComponent->IsLocallyControlled() && IsValid(Firearm))
+	if ((!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson()) && IsValid(Firearm))
 	{
 		FVector StockOffset = Firearm->GetStockOffset() * -1.0f;
 		StockOffset.Y += Firearm->GetStockLengthOfPull();
@@ -323,16 +381,16 @@ void UFPSTemplateAnimInstance::SetRelativeToHand()
 {
 	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
 	{
-		HeadAimingRotation = AimInterface->GetHeadRotation();
+		HeadAimingRotation = IFPSTemplate_AimInterface::Execute_GetHeadRotation(AimingActor);
 		//HeadAimingRotation = FRotator(45.0f, 0.0f, 0.0f);
 		FTransform SightSocketTransform = FTransform();
-		if (SprintAlpha > 0.0f)
+		if (SprintAlpha > 0.0f || (bUseBasePoseCorrection && AimingAlpha >= 0.0f && AimingAlpha < BasePoseCorrectionBlend))
 		{
-			SightSocketTransform = AimInterface->GetDefaultSightSocketTransform();
+			SightSocketTransform = IFPSTemplate_AimInterface::Execute_GetDefaultSightSocketTransform(AimingActor);
 		}
 		else
 		{
-			SightSocketTransform = AimInterface->GetSightSocketTransform();
+			SightSocketTransform = IFPSTemplate_AimInterface::Execute_GetSightSocketTransform(AimingActor);
 		}
 		const FTransform Hand_RTransform = CharacterComponent->GetInUseMesh()->GetSocketTransform(RightHandBone);
 		FinalRelativeHand = UKismetMathLibrary::MakeRelativeTransform(SightSocketTransform, Hand_RTransform);
@@ -341,7 +399,7 @@ void UFPSTemplateAnimInstance::SetRelativeToHand()
 		TestLoc.Z += 80.0f;
 		SightSocketTransform.SetLocation(TestLoc);
 		
-		const FTransform DefaultTransform = AimInterface->GetDefaultSightSocketTransform();
+		const FTransform DefaultTransform = IFPSTemplate_AimInterface::Execute_GetDefaultSightSocketTransform(AimingActor);
 		DefaultRelativeToHand = UKismetMathLibrary::MakeRelativeTransform(DefaultTransform, Hand_RTransform);
 		bInterpRelativeToHand = true;
 	}
@@ -371,7 +429,7 @@ void UFPSTemplateAnimInstance::SetLeftHandIK()
 
 void UFPSTemplateAnimInstance::InterpPortPose(float DeltaSeconds)
 {
-	if (Firearm)
+	if (IsValid(Firearm))
 	{
 		FTransform InterpTo = FTransform(SightRotation, SightLocation, FVector::OneVector);
 		switch (PortPose)
@@ -429,7 +487,7 @@ void UFPSTemplateAnimInstance::SetPortPose(EPortPose Pose)
 
 void UFPSTemplateAnimInstance::SetPortPoseBlend(EPortPose Pose, float Alpha)
 {
-	if (Firearm)
+	if (IsValid(Firearm))
 	{
 		PortPose = Pose;
 		PortPoseAlpha = Alpha;
@@ -450,7 +508,7 @@ void UFPSTemplateAnimInstance::SetPortPoseBlend(EPortPose Pose, float Alpha)
 
 bool UFPSTemplateAnimInstance::HandleFirearmCollision(EPortPose Pose, float Alpha)
 {
-	if (Firearm)
+	if (IsValid(Firearm))
 	{
 		if (PortPose == EPortPose::None)
 		{
@@ -479,7 +537,7 @@ bool UFPSTemplateAnimInstance::HandleFirearmCollision(EPortPose Pose, float Alph
 				ShortStockPoseLocation = FVector::ZeroVector;
 				ShortStockPoseRotation = FRotator::ZeroRotator;
 				SetPortPoseBlend(Pose, Alpha);
-				return true;
+				return false;
 			}
 			return false;
 		}
@@ -497,7 +555,7 @@ bool UFPSTemplateAnimInstance::HandleFirearmCollision(EPortPose Pose, float Alph
 
 void UFPSTemplateAnimInstance::InterpShakeCurve(float DeltaSeconds)
 {
-	if (Firearm)
+	if (IsValid(Firearm))
 	{
 		if (const UCurveVector* Curve = Firearm->GetShakeCurve())
 		{
@@ -526,7 +584,7 @@ void UFPSTemplateAnimInstance::InterpShakeCurve(float DeltaSeconds)
 
 void UFPSTemplateAnimInstance::PlayFirearmShakeCurve(bool ManuallyPlay)
 {
-	if (Firearm && bCanPlayShakeCurve)
+	if (IsValid(Firearm) && bCanPlayShakeCurve)
 	{
 		bCanPlayShakeCurve = ManuallyPlay;
 		ShakeRotation = FRotator::ZeroRotator;
@@ -536,15 +594,43 @@ void UFPSTemplateAnimInstance::PlayFirearmShakeCurve(bool ManuallyPlay)
 	}
 }
 
-void UFPSTemplateAnimInstance::EnableLeftHandIK(bool Enable)
+void UFPSTemplateAnimInstance::InterpCustomCurve(float DeltaSeconds)
 {
-	if (Enable)
+	if (IsValid(CustomCurveData.RotationCurve) || IsValid(CustomCurveData.LocationCurve))
 	{
-		LeftHandIKAlpha = 1.0f;
+		const float CurrentTime = (GetWorld()->GetTimeSeconds() - CustomCurveStartTime) * CustomCurveData.CurveSpeed;
+		if (CustomCurveData.LocationCurve)
+		{
+			CustomCurveLocation = CustomCurveData.LocationCurve->GetVectorValue(CurrentTime);
+		}
+		
+		if (CustomCurveData.RotationCurve)
+		{
+			const FVector Shake = CustomCurveData.RotationCurve->GetVectorValue(CurrentTime);
+			CustomCurveRotation = FRotator(Shake.X, Shake.Y, Shake.Z);
+		}
+		
+		if (CurrentTime > CustomCurveData.CurveDuration)
+		{
+			bInterpCustomCurve = false;
+			CustomCurveAlpha = 0.0f;
+		}
 	}
 	else
 	{
-		LeftHandIKAlpha = 0.0f;
+		bInterpCustomCurve = false;
+		CustomCurveAlpha = 0.0f;
+	}
+}
+
+void UFPSTemplateAnimInstance::PlayCustomCurve(FCurveData INCurveData)
+{
+	if (IsValid(INCurveData.RotationCurve) || IsValid(INCurveData.LocationCurve))
+	{
+		CustomCurveAlpha = 1.0f;
+		CustomCurveData = INCurveData;
+		CustomCurveStartTime = GetWorld()->GetTimeSeconds();
+		bInterpCustomCurve = true;
 	}
 }
 
@@ -557,7 +643,8 @@ void UFPSTemplateAnimInstance::InterpCameraZoom(float DeltaSeconds)
 	{
 		if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
 		{
-			const FAimCameraSettings CameraSettings = AimInterface->GetCameraSettings();
+			FAimCameraSettings CameraSettings;
+			IFPSTemplate_AimInterface::Execute_GetCameraSettings(AimingActor, CameraSettings);
 			TargetFOV -= CameraSettings.CameraFOVZoom;
 			InterpSpeed = CameraSettings.CameraFOVZoomSpeed;
 		}
@@ -575,7 +662,15 @@ void UFPSTemplateAnimInstance::InterpAimingAlpha(float DeltaSeconds)
 	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
 	{
 		float InterpSpeed = AimInterpolationSpeed;
-		float Multiplier = AimInterface->GetAimInterpolationMultiplier();
+		float Multiplier;
+		if (bIsAiming)
+		{
+			Multiplier = IFPSTemplate_AimInterface::Execute_GetAimInterpolationMultiplier(AimingActor);
+		}
+		else
+		{
+			Multiplier = IFPSTemplate_AimInterface::Execute_GetUnAimInterpolationMultiplier(AimingActor);
+		}
 		Multiplier = UKismetMathLibrary::NormalizeToRange(Multiplier, -40.0f, 150.0f);
 		InterpSpeed *= Multiplier;
 
@@ -593,12 +688,14 @@ void UFPSTemplateAnimInstance::SetRotationLag(float DeltaSeconds)
 	if (IFPSTemplate_AimInterface* AimInterface = Cast<IFPSTemplate_AimInterface>(AimingActor))
 	{
 		float InterpSpeed = RotationLagResetInterpolationSpeed;
-		float Multiplier = AimInterface->GetRotationLagInterpolationMultiplier();
+		float Multiplier = IFPSTemplate_AimInterface::Execute_GetRotationLagInterpolationMultiplier(AimingActor);
 		Multiplier = UKismetMathLibrary::NormalizeToRange(Multiplier, -40.0f, 150.0f);
 		InterpSpeed *= Multiplier;
 	
 		const FRotator CurrentRotation = CharacterComponent->GetControlRotation();
-		FRotator Rotation = UKismetMathLibrary::RInterpTo(UnmodifiedRotationLagTransform.Rotator(), CurrentRotation - OldRotation, DeltaSeconds, InterpSpeed);
+		const FRotator Difference = CurrentRotation - OldRotation;
+
+		FRotator Rotation = UKismetMathLibrary::RInterpTo(UnmodifiedRotationLagTransform.Rotator(), Difference, DeltaSeconds, InterpSpeed);
 		UnmodifiedRotationLagTransform.SetRotation(Rotation.Quaternion());
 
 		float FirearmWeightMultiplier = 1.0f;
@@ -641,7 +738,7 @@ void UFPSTemplateAnimInstance::SetMovementLag(float DeltaSeconds)
 		RightSpeed = UKismetMathLibrary::NormalizeToRange(RightSpeed, 0.0f, 75.0f);
 		VerticalSpeed = UKismetMathLibrary::NormalizeToRange(VerticalSpeed, 0.0f, 75.0f);
 
-		const FSwayMultipliers SwayMultipliers = AimInterface->GetSwayMultipliers();
+		const FSwayMultipliers SwayMultipliers = IFPSTemplate_AimInterface::Execute_GetSwayMultipliers(AimingActor);
 		FRotator NewRot = MovementLagRotation;
 		NewRot.Pitch = UKismetMathLibrary::FInterpTo(NewRot.Pitch, RightSpeed * SwayMultipliers.MovementRollMultiplier, DeltaSeconds, 10.0f);
 		NewRot.Roll = UKismetMathLibrary::FInterpTo(NewRot.Roll, VerticalSpeed * SwayMultipliers.MovementPitchMultiplier, DeltaSeconds, 10.0f);
@@ -652,17 +749,26 @@ void UFPSTemplateAnimInstance::SetMovementLag(float DeltaSeconds)
 void UFPSTemplateAnimInstance::InterpLeaning(float DeltaSeconds)
 {
 	float LeanAngle = 0.0f;
-	const float NewLeanAngle = CharacterComponent->GetLeanAngle() / 2.0f;
-	float CurrentLeanAngle = LeanRotation.Pitch;
-	switch (CurrentLean)
+	float NewLeanAngle = 0.0f;
+	if (CharacterComponent->IsIncrementalLeaning())
 	{
+		NewLeanAngle = CharacterComponent->GetIncrementalLeanAngle() / 2.0f;
+		LeanAngle = NewLeanAngle;
+	}
+	else
+	{
+		NewLeanAngle = CharacterComponent->GetLeanAngle() / 2.0f;
+		switch (CurrentLean)
+		{
 		case ELeaning::None : break;
 		case ELeaning::Left : LeanAngle = NewLeanAngle * -1.0f; break;
 		case ELeaning::Right : LeanAngle = NewLeanAngle; break;
+		}
 	}
-
-	CurrentLeanAngle = UKismetMathLibrary::FInterpTo(CurrentLeanAngle, LeanAngle, DeltaSeconds, 10.0f);
+	float CurrentLeanAngle = LeanRotation.Pitch;
 	
+	CurrentLeanAngle = UKismetMathLibrary::FInterpTo(CurrentLeanAngle, LeanAngle, DeltaSeconds, CharacterComponent->GetLeanSpeed());
+
 	LeanRotation.Pitch = CurrentLeanAngle;
 	if (CurrentLeanAngle == NewLeanAngle || CurrentLeanAngle == NewLeanAngle * -1.0f)
 	{
@@ -694,7 +800,7 @@ void UFPSTemplateAnimInstance::HandleMovementSway(float DeltaSeconds)
 				Multiplier = FMath::Clamp(Multiplier, 0.5f, 1.0f);
 			}
 
-			SwayMultiplier = UKismetMathLibrary::FInterpTo(SwayMultiplier, Firearm->GetAimSwayMultiplier(), DeltaSeconds, 2.0f);
+			SwayMultiplier = UKismetMathLibrary::FInterpTo(SwayMultiplier, Firearm->GetSwayMultiplier(), DeltaSeconds, 2.0f);
 			
 			CurveTimer += (DeltaSeconds * VelocityMultiplier);
 			FVector Graph = Curve->GetVectorValue(CurveTimer);
@@ -708,7 +814,7 @@ void UFPSTemplateAnimInstance::HandleMovementSway(float DeltaSeconds)
 
 void UFPSTemplateAnimInstance::HandleSprinting()
 {
-	if (CharacterComponent->GetIsSprinting() && CharacterVelocity > CharacterComponent->GetMovementComponentSprintSpeed() / 2.0f)
+	if (CharacterComponent->GetIsSprinting() && (CharacterVelocity > CharacterComponent->GetMovementComponentSprintSpeed() / 2.0f || CharacterComponent->GetForceIntoSprintPose()))
 	{
 		if (PortPose != EPortPose::None)
 		{
@@ -739,7 +845,7 @@ void UFPSTemplateAnimInstance::HandleSprinting()
 
 bool UFPSTemplateAnimInstance::IsLocallyControlled()
 {
-	if (CharacterComponent)
+	if (IsValid(CharacterComponent))
 	{
 		bIsLocallyControlled = CharacterComponent->IsLocallyControlled();
 	}
@@ -856,11 +962,11 @@ void UFPSTemplateAnimInstance::RecoilInterpTo(float DeltaSeconds)
 	{
 		const float CurrentTime = GetWorld()->GetTimeSeconds() - RecoilStartTime;
 		const FRecoilData RecoilData = Firearm->GetRecoilData();
+		const float FirearmRecoilMultiplier = Firearm->GetFirearmStats().RecoilMultiplier;
 		if (RecoilData.RecoilLocationCurve)
 		{
 			const float Randomess = FMath::RandRange(RecoilData.RecoilLocationRandomness.Min, RecoilData.RecoilLocationRandomness.Max);
-			RecoilLocation += (RecoilData.RecoilLocationCurve->GetVectorValue(CurrentTime) * Randomess);
-			RecoilLocation *= Firearm->GetFirearmStats().RecoilMultiplier;
+			RecoilLocation += ((RecoilData.RecoilLocationCurve->GetVectorValue(CurrentTime) * Randomess) * FirearmRecoilMultiplier) * (100.0f * DeltaSeconds);
 			FinalRecoilTransform.SetLocation(RecoilLocation);
 		}
 		if (RecoilData.RecoilRotationCurve)
@@ -870,8 +976,7 @@ void UFPSTemplateAnimInstance::RecoilInterpTo(float DeltaSeconds)
 			const float YawRandom = (CurveData.Y * FMath::RandRange(RecoilData.RecoilYawRandomness.Min, RecoilData.RecoilYawRandomness.Max)) * RecoilMultiplier;
 			const float RollRandom = (CurveData.Z * FMath::RandRange(RecoilData.RecoilRollRandomness.Min, RecoilData.RecoilRollRandomness.Max)) * RecoilMultiplier;
 			
-			RecoilRotation += FRotator(RollRandom, PitchRandom, YawRandom);
-			RecoilRotation *= Firearm->GetFirearmStats().RecoilMultiplier;
+			RecoilRotation += (FRotator(RollRandom, PitchRandom, YawRandom) * FirearmRecoilMultiplier) * (100.0f * DeltaSeconds);
 			FinalRecoilTransform.SetRotation(RecoilRotation.Quaternion());
 		}
 	}

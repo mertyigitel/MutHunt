@@ -12,6 +12,7 @@
 UFPSTemplate_HoleComponent::UFPSTemplate_HoleComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(false);
 }
 
 // Called when the game starts or when spawned
@@ -77,10 +78,10 @@ void UFPSTemplate_HoleComponent::AddHole(const FHitResult& HitResult)
 			{
 				FString ParamName = FString("Impact" + FString::FromInt(Material.HoleIndex));
 				
-				Material.MaterialInstance->SetVectorParameterValue(FName(ParamName), HitResult.Location);
+				Material.MaterialInstance->SetVectorParameterValue(FName(ParamName), HitResult.ImpactPoint);
 				if (Material.HoleIndex < Material.HoleLocations.Num())
 				{
-					Material.HoleLocations[Material.HoleIndex] = HitResult.Location;
+					Material.HoleLocations[Material.HoleIndex] = HitResult.ImpactPoint;
 				}
 				
 				if (++Material.HoleIndex > Material.MaxHoleCount - 1)

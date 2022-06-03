@@ -1,14 +1,14 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "5",
+	"VersionName": "5.4",
 	"FriendlyName": "UltimateFPSTemplate",
-	"Description": "Ultimate Multiplayer FPS Templatehttps://online-leaks.com/",
-	"Category": "Ultimate First Person Shooter Template https://online-leaks.com/",
+	"Description": "Ultimate Multiplayer FPS Template",
+	"Category": "Ultimate First Person Shooter Template",
 	"CreatedBy": "Sneaky Kitty Game Dev",
-	"CreatedByURL": "https://online-leaks.com/",
-	"DocsURL": "https://online-leaks.com/",
-	"MarketplaceURL": "https://online-leaks.com/",
+	"CreatedByURL": "https://www.youtube.com/channel/UCYcDJPGvIUFxBTmXOZWFswQ",
+	"DocsURL": "https://www.youtube.com/playlist?list=PLnHeglBaPYu904gjIxkAfFI15gGI30IYt",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/4986d4f5b73148deb154e1cd31dd9623",
 	"SupportURL": "https://discord.gg/W5g6pZXfjh",
 	"EngineVersion": "5.0.0",
 	"CanContainContent": true,
@@ -18,7 +18,15 @@
 			"Name": "UltimateFPSTemplate",
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
-			"WhitelistPlatforms": [
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "UltimateFPSEditor",
+			"Type": "UncookedOnly",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
 				"Win64"
 			]
 		}

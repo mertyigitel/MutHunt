@@ -33,17 +33,37 @@ protected:
 	bool bIsLight;
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
 	bool bIsLaser;
+	// What collision channel to use for the light. For things like glass you will want to set it to ignore
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
 	TEnumAsByte<ECollisionChannel> CollisionChannel;
+	// Similar to Tarkov how you can cycle through different modes of the light laser. This is OPTIONAL to be used with CycleThroughModes()
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
+	TArray<ELightLaser> CycleModes;
+	// Light power intensity modes. Allows for changing the strength of the flashlight at runtime
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
+	TArray<float> LightPowerIntensityLevels;
+	// Max distance the lazer can reach
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default", meta = (EditCondition = "bIsLaser"))
 	float MaxLaserDistance;
-	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
+	// How much to scale the lazer dot by per distance
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default", meta = (EditCondition = "bIsLaser"))
+	float LazerScaleMultiplier;
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default", meta = (EditCondition = "bIsLaser"))
 	TArray<UMaterialInstance*> LaserMaterials;
-	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
+	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default", meta = (EditCondition = "bIsLaser"))
 	TArray<UMaterialInstance*> LaserDotMaterials;
 	
+	// Socket for the laser to be projected from (use for collision/line tracing)
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Sockets")
 	FName LaserSocket;
+
+	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | LightLaser")
+	uint8 CycleModesIndex;
+
+	UPROPERTY(ReplicatedUsing = OnRep_LightPowerIntensityIndex)
+	uint8 LightPowerIntensityIndex;
+	UFUNCTION()
+	void OnRep_LightPowerIntensityIndex();
 	
 	UPROPERTY(ReplicatedUsing = OnRep_LightOn)
 	bool bLightOn;
@@ -65,17 +85,32 @@ protected:
 	void Server_ToggleLaser();
 	UFUNCTION(Server, Unreliable, WithValidation)
 	void Server_CycleLaserColor(uint8 Index);
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void Server_ToggleLightAndLaser(bool bSync);
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void Server_CyclePowerModes(uint8 Index);
 
 	virtual void PostInitProperties() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void BeginPlay() override;
 	virtual void SetupPartMesh() override;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "FPSTemplate | Laser")
+	void OnLaserScaleChanged(float DistanceForLaserHit);
 	
 public:
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
 	void ToggleLight();
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
 	void ToggleLaser();
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
+	void ToggleLightAndLaser(bool bSync);
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
+	void CyclePowerModes();
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
+	void SetPowerMode(uint8 Index);
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
+	void CycleThroughModes();
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")
 	void CycleLaserColor();
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Toggle")

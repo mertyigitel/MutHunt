@@ -24,6 +24,6 @@ class ULTIMATEFPSTEMPLATE_API IFPSTemplate_HitInterface
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "FPSTemplate | HitInterface")
-	void OnHit(const FHitResult& HitResult);
-	virtual void OnHit_Implementation(const FHitResult& HitResult) {}
+	void OnHit(const FHitResult& HitResult, AActor* Projectile);
+	virtual void OnHit_Implementation(const FHitResult& HitResult, AActor* Projectile) {}
 };

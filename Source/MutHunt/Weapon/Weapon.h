@@ -23,7 +23,7 @@ class MUTHUNT_API AWeapon : public AFPSTemplateFirearm
 	GENERATED_BODY()
 	
 public:
-	AWeapon();
+	AWeapon(const FObjectInitializer& ObjectInitializer);
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	void ShowPickupWidget(bool bShowWidget);

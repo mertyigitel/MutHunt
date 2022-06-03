@@ -6,6 +6,7 @@
 #include "Components/FPSTemplate_PartComponent.h"
 #include "Actors/FPSTemplateFirearm.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Misc/FPSTemplateStatics.h"
 
 #include "Net/UnrealNetwork.h"
 
@@ -14,6 +15,7 @@ AFPSTemplate_Muzzle::AFPSTemplate_Muzzle()
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
+	NetUpdateFrequency = 1.0f;
 	
 	bIsSuppressor = false;
 	bUseMuzzleTemperature = false;
@@ -101,6 +103,16 @@ bool AFPSTemplate_Muzzle::IsSuppressor() const
 		return MuzzleAttachment->bIsSuppressor;
 	}
 	return bIsSuppressor;
+}
+
+UNiagaraSystem* AFPSTemplate_Muzzle::GetFireNiagaraSystem()
+{
+	const int32 RandomIndex = UFPSTemplateStatics::GetRandomIndexForArray(FireNiagaraSystems.Num());
+	if (RandomIndex != INDEX_NONE)
+	{
+		return FireNiagaraSystems[RandomIndex];
+	}
+	return nullptr;
 }
 
 void AFPSTemplate_Muzzle::CacheParts()

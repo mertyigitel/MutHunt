@@ -7,7 +7,7 @@
 #include "MutHunt/Character/SoldierCharacter.h"
 #include "Net/UnrealNetwork.h"
 
-AWeapon::AWeapon()
+AWeapon::AWeapon(const FObjectInitializer& ObjectInitializer) : Super::AFPSTemplateFirearm(ObjectInitializer)
 {
 	//PrimaryActorTick.bCanEverTick = true;
 	//bReplicates = true;
@@ -15,9 +15,9 @@ AWeapon::AWeapon()
 	/*WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("WeaponMesh"));
 	SetRootComponent(WeaponMesh);*/
 
-	FirearmMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
+	/*FirearmMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	FirearmMesh->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Ignore);
-	FirearmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FirearmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);*/
 
 	AreaSphere = CreateDefaultSubobject<USphereComponent>(TEXT("AreaSphere"));
 	AreaSphere->SetupAttachment(RootComponent);

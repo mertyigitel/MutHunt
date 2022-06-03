@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "FPSTemplateDataTypes.h"
+#include "GameplayTagContainer.h"
 
 #include "FPSTemplateAnimInstance.generated.h"
 
@@ -29,6 +30,10 @@ protected:
 	int32 SpineBoneCount;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Toggles")
 	bool bUseLeftHandIK;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Toggles")
+	bool bUseBasePoseCorrection;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Toggles", meta = (EditCondition = "bUseBasePoseCorrection"))
+	float BasePoseCorrectionBlend;
 	
 	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
 	UFPSTemplate_CharacterComponent* CharacterComponent;
@@ -39,6 +44,8 @@ protected:
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Firearm")
 	int32 AnimationIndex;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Firearm")
+	FGameplayTag AnimationGameplayTag;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Firearm")
 	AActor* AimingActor;
@@ -49,8 +56,6 @@ protected:
 	UAnimSequence* LeftHandPose;
 	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
 	bool bValidLeftHandPose;
-	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Firearm")
-	float MakeLeftHandFollowAlpha;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Aiming")
 	float AimInterpolationSpeed;
@@ -62,6 +67,15 @@ protected:
 	float MotionLagResetInterpolationSpeed;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Aiming")
 	FName RightHandBone;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Crouch")
+	bool bEnableProceduralCrouch;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Crouch", meta = (EditCondition = "bEnableProceduralCrouch"))
+	float CrouchInterpSpeed;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Crouch", meta = (EditCondition = "bEnableProceduralCrouch"))
+	FName LeftFootBone;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPSTemplate | Crouch", meta = (EditCondition = "bEnableProceduralCrouch"))
+	FName RightFootBone;
+	
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Aiming")
 	FVector RelativeToHandLocation;
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Aiming")
@@ -225,8 +239,26 @@ protected:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Poses")
 	float CustomPoseAlpha;
 
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Curve")
+	FVector CustomCurveLocation;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Curve")
+	FRotator CustomCurveRotation;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "FPSTemplate | Curve")
+	float CustomCurveAlpha;
+	FCurveData CustomCurveData;
+	float CustomCurveStartTime;
+	bool bInterpCustomCurve;
+	void InterpCustomCurve(float DeltaSeconds);
+
+	// Returns true if you are the one controlling the actor of this AnimBP
 	UFUNCTION(BlueprintPure, Category = "FPSTemplate | Extra")
 	bool IsLocallyControlled();
+
+	bool bInterpCrouch;
+	float CrouchHeightInterpTo;
+	float CurrentCrouchHeight;
+	FVector MeshStartLocation;
+	void InterpToNewCrouch(float DeltaSeconds);
 	
 public:
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Aiming")
@@ -235,6 +267,8 @@ public:
 	void CycledSights();
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Aiming")
 	void PlayFirearmShakeCurve(bool ManuallyPlay = false);
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Aiming")
+	void PlayCustomCurve(FCurveData INCurveData);
 	
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Animation")
 	void EnterCustomPose(const FTransform& Pose);
@@ -244,6 +278,8 @@ public:
 	void SetLeaning(ELeaning Lean);
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Animation")
 	void SetAnimationIndex(int32 NewAnimationIndex) { AnimationIndex = NewAnimationIndex; }
+	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Animation")
+	void SetAnimationGameplayTag(FGameplayTag GameplayTag) { AnimationGameplayTag = GameplayTag; }
 	
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Actions")
 	void SetIsReloading(bool IsReloading, float BlendAlpha = 0.35f);
@@ -254,9 +290,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Actions")
 	void ChangingFireMode(bool IsChanging);
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Actions")
-	void EnableLeftHandIK(bool Enable);
-	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Actions")
-	void SetLeftHandFollow(bool bMakeFollow) { MakeLeftHandFollowAlpha = bMakeFollow; }
+	void EnableLeftHandIK(bool Enable) { Enable ? LeftHandIKAlpha = 1.0f : LeftHandIKAlpha = 0.0f; }
 	
 	UFUNCTION(BlueprintCallable, Category = "FPSTemplate | Default")
 	void StopMontages(float BlendOutTime);
@@ -271,4 +305,6 @@ public:
 	void SetCharacterComponent(UFPSTemplate_CharacterComponent* INCharacterComponent) { CharacterComponent = INCharacterComponent;}
 
 	void SetFreeLook(bool FreeLook);
+
+	void InterpolateCrouch(FVector MeshStartingLocation, float NewCrouchHeight);
 };

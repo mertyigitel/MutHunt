@@ -13,28 +13,34 @@
 #include "FirearmParts/BaseClasses/FPSTemplate_MagnifierBase.h"
 #include "FirearmParts/BaseClasses/FPSTemplate_PartBase.h"
 #include "Components/FPSTemplate_CharacterComponent.h"
+#include "Components/FPS_FirearmStabilizerComponent.h"
 
 #include "DrawDebugHelpers.h"
+#include "NiagaraSystem.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
+#define DEFAULT_STATS_MULTIPLIER (GetFirearmStats().Ergonomics * (10.0f / (GetFirearmStats().Weight * 1.5f)))
+
 // Sets default values
-AFPSTemplateFirearm::AFPSTemplateFirearm()
+AFPSTemplateFirearm::AFPSTemplateFirearm(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
-
-	FirearmMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
-	FirearmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	RootComponent = FirearmMesh;
-	PoseCollision = ECollisionChannel::ECC_GameTraceChannel2;
-	
 	bReplicates = true;
+	NetUpdateFrequency = 8.0f;
+
+	/*FirearmMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
+	FirearmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RootComponent = FirearmMesh;*/
+	PoseCollision = ECollisionChannel::ECC_GameTraceChannel2;
 
 	bFirearmHidden = false;
 	
-	FirearmIndex = 0;
+	FirearmAnimationIndex = 0;
+	PointAimIndex = -1;
 
 	FirearmGripSocket = FName("cc_FirearmGrip");
 	GripSocketOffset = FTransform();
@@ -47,15 +53,21 @@ AFPSTemplateFirearm::AFPSTemplateFirearm()
 	CameraSettings.CameraDistance = 0.0f;
 	CameraSettings.bUsedFixedCameraDistance = false;
 
+	bSpawnDefaultPartsFromPreset = false;
+	bShouldSpawnDefaultsFromPreset = true;
+
 	bUseLeftHandIK = false;
 
 	DefaultFirearmStats.Weight = 7.0f;
 	DefaultFirearmStats.Ergonomics = 50.0f;
 	DefaultFirearmStats.RecoilMultiplier = 1.0f;
 
-	CameraFOVZoom = 15.0f;
-	CameraFOVZoomSpeed = 10.0f;
+	/*CameraFOVZoom = 15.0f;
+	CameraFOVZoomSpeed = 10.0f;*/
 
+	PointAimADSInterpolationMultiplier = 1.2f;
+	bUnAimMultiplierSameAsADS = false;
+	UnAimInterpolationMultiplier = 1.0f;
 	ShoulderStockOffset = FVector(-8.0f, 0.0f, 2.0f);
 	HeadAimRotation = FRotator(45.0f, 0.0f, 0.0f);
 
@@ -90,9 +102,12 @@ AFPSTemplateFirearm::AFPSTemplateFirearm()
 	ThirdPersonLowPortPose.SetLocation(FVector(0.0f, 8.0f, 8.0f));
 	ThirdPersonLowPortPose.SetRotation(FRotator(80.0f, -45.0f, 0.0f).Quaternion());
 
-	DefaultAimSwayMultiplier = 2.0f;
-	AimSwayMultiplier = DefaultAimSwayMultiplier;
+	DefaultSwayMultiplier = 2.0f;
+	SwayMultiplier = DefaultSwayMultiplier;
 
+	RotationLagMultiplier = 1.0f;
+	MovementLagMultiplier = 1.0f;
+	
 	CharacterComponent = nullptr;
 
 	AttachedToSocket = NAME_None;
@@ -100,7 +115,7 @@ AFPSTemplateFirearm::AFPSTemplateFirearm()
 
 void AFPSTemplateFirearm::OnRep_CharacterComponent()
 {
-	CycleSights();
+	//CycleSights();
 	if (IsValid(this) && AttachedToSocket != NAME_None)
 	{
 		AttachToSocket(AttachedToSocket);
@@ -112,14 +127,18 @@ void AFPSTemplateFirearm::BeginPlay()
 {
 	Super::BeginPlay();
 
+	FirearmMesh = GetSkeletalMeshComponent();
+	
 	if (const AActor* OwningActor = GetOwner())
 	{
-		CharacterComponent = Cast<UFPSTemplate_CharacterComponent>(OwningActor->GetComponentByClass(TSubclassOf<UFPSTemplate_CharacterComponent>()));
+		CharacterComponent = Cast<UFPSTemplate_CharacterComponent>(OwningActor->GetComponentByClass(UFPSTemplate_CharacterComponent::StaticClass()));
 	}
 	
 	if (HasAuthority())
 	{
-		GetComponents<UFPSTemplate_PartComponent>(PartComponents);
+		TArray<UFPSTemplate_PartComponent*> TempPartComponents;
+		GetComponents<UFPSTemplate_PartComponent>(TempPartComponents);
+		FirearmPartComponentsOwner.SetPartComponents(TempPartComponents, EPartOwnerIndex::Part);
 	}
 
 	if (HasAuthority())
@@ -129,15 +148,19 @@ void AFPSTemplateFirearm::BeginPlay()
 
 	// Update initial Default Parts
 	FTimerHandle TTemp;
-	GetWorldTimerManager().SetTimer(TTemp, this, &AFPSTemplateFirearm::PartsChanged, 0.1f, false);
+	GetWorldTimerManager().SetTimer(TTemp, this, &AFPSTemplateFirearm::PartsChanged_Implementation, 0.1f, false);
 
-	FixPoseTransforms();
+	FixPoseTransforms(FirstPersonShortStockPose, ThirdPersonShortStockPose);
+	FixPoseTransforms(FirstPersonBasePoseOffset, ThirdPersonBasePoseOffset);
+	FixPoseTransforms(FirstPersonHighPortPose, ThirdPersonHighPortPose);
+	FixPoseTransforms(FirstPersonLowPortPose, ThirdPersonLowPortPose);
+	FixPoseTransforms(FirstPersonSprintPose, ThirdPersonSprintPose);
 }
 
 void AFPSTemplateFirearm::PostInitProperties()
 {
 	Super::PostInitProperties();
-	AimSwayMultiplier = DefaultAimSwayMultiplier;
+	SwayMultiplier = DefaultSwayMultiplier;
 	
 	FirearmStats = DefaultFirearmStats;
 	if (FireModes.Num())
@@ -145,14 +168,26 @@ void AFPSTemplateFirearm::PostInitProperties()
 		FireMode = FireModes[0];
 	}
 	TimerAutoFireRate = 60 / FireRateRPM;
-	FirearmMesh->SetCollisionResponseToChannel(PoseCollision, ECollisionResponse::ECR_Ignore);
+
+	bool bValidMesh = false;
+	if (GetSkeletalMeshComponent())
+	{
+		bValidMesh = true;
+		GetSkeletalMeshComponent()->SetCollisionResponseToChannel(PoseCollision, ECR_Ignore);
+		GetSkeletalMeshComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		GetSkeletalMeshComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+		GetSkeletalMeshComponent()->SetCollisionResponseToChannel(ECC_Vehicle, ECR_Ignore);
+	}
+	{
+		ensureMsgf(bValidMesh, TEXT("Firearm: %s Has an INVALID skeletal mesh component"), *GetName());
+	}
 }
 
 void AFPSTemplateFirearm::OnRep_Owner()
 {
 	if (const AActor* OwningActor = GetOwner())
 	{
-		CharacterComponent = Cast<UFPSTemplate_CharacterComponent>(OwningActor->GetComponentByClass(TSubclassOf<UFPSTemplate_CharacterComponent>()));
+		CharacterComponent = Cast<UFPSTemplate_CharacterComponent>(OwningActor->GetComponentByClass(UFPSTemplate_CharacterComponent::StaticClass()));
 	}
 	RefreshCurrentSight();
 }
@@ -162,19 +197,15 @@ void AFPSTemplateFirearm::OnRep_AttachmentReplication()
 	//Super::OnRep_AttachmentReplication();
 }
 
-void AFPSTemplateFirearm::FixPoseTransforms()
+FPrimaryAssetId AFPSTemplateFirearm::GetPrimaryAssetId() const
 {
-	FVector Vec = FirstPersonBasePoseOffset.GetLocation();
-	float TempVal = Vec.Z;
-	Vec.Z = Vec.X;
-	Vec.X = TempVal;
-	FirstPersonBasePoseOffset.SetLocation(Vec);
+	return FPrimaryAssetId(AssetType, AssetName);
+}
 
-	Vec = ThirdPersonBasePoseOffset.GetLocation();
-	TempVal = Vec.Z;
-	Vec.Z = Vec.X;
-	Vec.X = TempVal;
-	ThirdPersonBasePoseOffset.SetLocation(Vec);
+void AFPSTemplateFirearm::FixPoseTransforms(FTransform& FirstPerson, FTransform& ThirdPerson)
+{
+	FirstPerson = UFPSTemplateStatics::FixTransform(FirstPerson);
+	ThirdPerson = UFPSTemplateStatics::FixTransform(ThirdPerson);
 }
 
 void AFPSTemplateFirearm::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -182,50 +213,123 @@ void AFPSTemplateFirearm::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AFPSTemplateFirearm, CharacterComponent);
 	DOREPLIFETIME(AFPSTemplateFirearm, bFirearmHidden);
-	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, PartComponents, COND_OwnerOnly);
-	DOREPLIFETIME(AFPSTemplateFirearm, BarrelComponent);
-	DOREPLIFETIME(AFPSTemplateFirearm, HandguardComponent);
-	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, SightComponents, COND_OwnerOnly);
 	DOREPLIFETIME(AFPSTemplateFirearm, CurrentSightComponent);
+	DOREPLIFETIME(AFPSTemplateFirearm, PointAimIndex);
 	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, FirearmStats, COND_OwnerOnly); // SET THIS TO OWNER ONLY ????
 	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, FireMode, COND_SkipOwner);
-	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, LightsLaserComponents, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, MagnifierComponents, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, ComponentsWithRenderTargets, COND_OwnerOnly);
-	DOREPLIFETIME(AFPSTemplateFirearm, StockComponent);
-	DOREPLIFETIME(AFPSTemplateFirearm, ForwardGripComponent);
-	DOREPLIFETIME(AFPSTemplateFirearm, MuzzleComponent);
 	DOREPLIFETIME(AFPSTemplateFirearm, AttachedToSocket);
+	DOREPLIFETIME_CONDITION(AFPSTemplateFirearm, FirearmPartComponentsOwner, COND_OwnerOnly);
+	DOREPLIFETIME(AFPSTemplateFirearm, FirearmPartComponents);
 }
 
-float AFPSTemplateFirearm::GetStockLengthOfPull() const
+float AFPSTemplateFirearm::GetStockLengthOfPull()
 {
-	if (StockComponent)
+	if (IsValid(FirearmPartComponents.GetPart(EPartIndex::Stock)))
 	{
-		if (IsValid(StockComponent->GetPart()))
+		if (const AFPSTemplate_PartBase* Part = FirearmPartComponents.GetPart(EPartIndex::Stock))
 		{
-			if (const AFPSTemplate_PartBase* Part = StockComponent->GetPart())
-			{
-				return Part->GetPartOffset() + Part->GetStockLengthOfPull();
-			}
+			return Part->GetPartOffset() + Part->GetStockLengthOfPull();
 		}
 	}
 	return 0.0f;
 }
 
-float AFPSTemplateFirearm::GetAimInterpolationMultiplier()
+float AFPSTemplateFirearm::GetAimInterpolationMultiplier_Implementation()
 {
-	return (GetFirearmStats().Ergonomics * (10.0f / (GetFirearmStats().Weight * 1.5f))) * PoseSettings.AimInterpolationMultiplier;
+	float SightAimMultiplier = 1.0f;
+	if (PointAimIndex > INDEX_NONE)
+	{
+		SightAimMultiplier = PointAimADSInterpolationMultiplier;
+	}
+	else
+	{
+		AFPSTemplate_SightBase* Sight = GetCurrentSight();
+		if (IsValid(Sight) && Sight->Implements<UFPSTemplate_AimInterface>())
+		{
+			SightAimMultiplier = IFPSTemplate_AimInterface::Execute_GetAimInterpolationMultiplier(Sight);
+		}
+	}
+	return (DEFAULT_STATS_MULTIPLIER * PoseSettings.AimInterpolationMultiplier) * SightAimMultiplier;
 }
 
-float AFPSTemplateFirearm::GetRotationLagInterpolationMultiplier()
+float AFPSTemplateFirearm::GetUnAimInterpolationMultiplier_Implementation()
 {
-	return (GetFirearmStats().Ergonomics * (10.0f / (GetFirearmStats().Weight * 1.5f)));
+	if (bUnAimMultiplierSameAsADS)
+	{
+		return IFPSTemplate_AimInterface::Execute_GetAimInterpolationMultiplier(this);
+	}
+	return (DEFAULT_STATS_MULTIPLIER * PoseSettings.AimInterpolationMultiplier) * UnAimInterpolationMultiplier;
 }
 
-float AFPSTemplateFirearm::GetMovementLagInterpolationMultiplier()
+float AFPSTemplateFirearm::GetRotationLagInterpolationMultiplier_Implementation()
 {
-	return (GetFirearmStats().Ergonomics * (10.0f / (GetFirearmStats().Weight * 1.5f)));
+	return DEFAULT_STATS_MULTIPLIER * RotationLagMultiplier;
+}
+
+float AFPSTemplateFirearm::GetMovementLagInterpolationMultiplier_Implementation()
+{
+	return DEFAULT_STATS_MULTIPLIER * MovementLagMultiplier;
+}
+
+void AFPSTemplateFirearm::GetCameraSettings_Implementation(FAimCameraSettings& OutCameraSettings)
+{
+	if (PointAimIndex > INDEX_NONE)
+	{
+		OutCameraSettings = CameraSettings;
+		return;
+	}
+	AFPSTemplate_SightBase* CurrentSight = GetCurrentSight();
+	if (IsValid(CurrentSight))
+	{
+		if (CurrentSight->Implements<UFPSTemplate_AimInterface>())
+		{
+			Execute_GetCameraSettings(CurrentSight, OutCameraSettings);
+			return;
+		}
+	}
+	OutCameraSettings = CameraSettings;
+}
+
+void AFPSTemplateFirearm::ZoomOptic_Implementation(bool bZoom)
+{
+	AFPSTemplate_SightBase* Sight = GetCurrentSight();
+	if (IsValid(Sight) && Sight->Implements<UFPSTemplate_AimInterface>())
+	{
+		Execute_ZoomOptic(Sight, bZoom);
+	}
+	else
+	{
+		RefreshCurrentSight();
+	}
+}
+
+FTransform AFPSTemplateFirearm::GetSightSocketTransform_Implementation()
+{
+	if (PointAimIndex > INDEX_NONE && PointAimIndex < PointAimSockets.Num() && FirearmMesh->DoesSocketExist(PointAimSockets[PointAimIndex]))
+	{
+		return FirearmMesh->GetSocketTransform(PointAimSockets[PointAimIndex]);
+	}
+	
+	if (CurrentSightComponent && IsValid(CurrentSightComponent->GetPart()))
+	{
+		return CurrentSightComponent->GetPart()->GetAimSocketTransform();
+	}
+	
+	TArray<UFPSTemplate_PartComponent*> PartComponents = FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Sight);
+	if (PartComponents.Num() && IsValid(PartComponents[0]) && IsValid(PartComponents[0]->GetPart()))
+	{
+		return PartComponents[0]->GetPart()->GetAimSocketTransform();
+	}
+	/*if (SightComponents.Num() && SightComponents[0] && IsValid(SightComponents[0]->GetPart()))
+	{
+		return SightComponents[0]->GetPart()->GetAimSocketTransform();
+	}*/
+	return FirearmMesh->GetSocketTransform(AimSocket);
+}
+
+FTransform AFPSTemplateFirearm::GetDefaultSightSocketTransform_Implementation()
+{
+	return FirearmMesh->DoesSocketExist(AimSocket) ? FirearmMesh->GetSocketTransform(AimSocket) : Execute_GetSightSocketTransform(this);
 }
 
 void AFPSTemplateFirearm::UpdateFirearmStats()
@@ -234,7 +338,7 @@ void AFPSTemplateFirearm::UpdateFirearmStats()
 	{
 		FirearmStats = DefaultFirearmStats;
 		FFirearmPartStats PartStats;
-		for (UFPSTemplate_PartComponent* PartComponent : PartComponents)
+		for (UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Part))
 		{
 			if (PartComponent && IsValid(PartComponent->GetPart()))
 			{
@@ -245,25 +349,31 @@ void AFPSTemplateFirearm::UpdateFirearmStats()
 
 		FirearmStats.Weight += PartStats.Weight;
 		float PercentMultiplier = 1.0f + (PartStats.RecoilChangePercentage / 100.0f);
-		PercentMultiplier = FMath::Clamp(PercentMultiplier, 0.1f, 1.0f);
+		PercentMultiplier = FMath::Clamp(PercentMultiplier, 0.1f, 100.0f);
 		FirearmStats.RecoilMultiplier = DefaultFirearmStats.RecoilMultiplier;
 		FirearmStats.RecoilMultiplier *= PercentMultiplier;
 
 		PercentMultiplier = 1.0f + (PartStats.ErgonomicsChangePercentage / 100.0f);
 		FirearmStats.Ergonomics *= PercentMultiplier;
+
+		PercentMultiplier = 1.0f + (PartStats.MuzzleVelocityChangePercentage / 100.0f);
+		PercentMultiplier = FMath::Clamp(PercentMultiplier, 0.1f, 100.0f);
+		FirearmStats.MuzzleVelocityMultiplier = DefaultFirearmStats.MuzzleVelocityMultiplier;
+		FirearmStats.MuzzleVelocityMultiplier *= PercentMultiplier;
 	}
 }
 
 void AFPSTemplateFirearm::HandleSightComponents()
 {
-	SightComponents.Empty();
-	for (UFPSTemplate_PartComponent* PartComponent : PartComponents)
+	FirearmPartComponentsOwner.ClearPartComponents(EPartOwnerIndex::Sight);
+	for (UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Part))
 	{
 		if (PartComponent && IsValid(PartComponent->GetPart()))
 		{
 			if (PartComponent->GetPart()->IsAimable())
 			{
-				SightComponents.Add(PartComponent);
+				FirearmPartComponentsOwner.AddPartComponent(PartComponent, EPartOwnerIndex::Sight);
+				//SightComponents.Add(PartComponent);
 			}
 			for (UFPSTemplate_PartComponent* PartPartComponent : PartComponent->GetPart()->GetSightComponents())
 			{
@@ -271,7 +381,8 @@ void AFPSTemplateFirearm::HandleSightComponents()
 				{
 					if (PartPartComponent->GetPart()->IsAimable())
 					{
-						SightComponents.Add(PartPartComponent);
+						FirearmPartComponentsOwner.AddPartComponent(PartPartComponent, EPartOwnerIndex::Sight);
+						//SightComponents.Add(PartPartComponent);
 					}
 				}
 			}
@@ -307,18 +418,93 @@ bool AFPSTemplateFirearm::IsSuppressed()
 	return false;
 }
 
-FAimCameraSettings& AFPSTemplateFirearm::GetCameraSettings()
+UNiagaraSystem* AFPSTemplateFirearm::GetFireNiagaraSystem()
 {
-	if (AFPSTemplate_SightBase* CurrentSight = GetCurrentSight())
+	AActor* MuzzleActor = GetMuzzleActor();
+	if (IsValid(MuzzleActor))
 	{
-		return CurrentSight->GetCameraSettings();
+		AFPSTemplate_Muzzle* Muzzle = Cast<AFPSTemplate_Muzzle>(MuzzleActor);
+		if (IsValid(Muzzle))
+		{
+			if (UNiagaraSystem* NiagaraSystem = Muzzle->GetFireNiagaraSystem())
+			{
+				return NiagaraSystem;
+			}
+		}
+		
+		const UFPSTemplate_PartComponent* BarrelComponent = GetPartComponent(EPartIndex::Barrel);
+		if (IsValid(BarrelComponent))
+		{
+			AFPSTemplate_Barrel* Barrel = BarrelComponent->GetPart<AFPSTemplate_Barrel>();
+			if (IsValid(Barrel))
+			{
+				if (UNiagaraSystem* NiagaraSystem = Barrel->GetFireNiagaraSystem())
+				{
+					return NiagaraSystem;
+				}
+			}
+		}
 	}
-	return CameraSettings;
+	
+	const int32 RandomIndex = UFPSTemplateStatics::GetRandomIndexForArray(FireNiagaraSystems.Num());
+	if (RandomIndex != INDEX_NONE)
+	{
+		return FireNiagaraSystems[RandomIndex];
+	}
+	return nullptr;
+}
+
+bool AFPSTemplateFirearm::Server_SetPointAiming_Validate(int32 Index)
+{
+	return true;
+}
+
+void AFPSTemplateFirearm::Server_SetPointAiming_Implementation(int32 Index)
+{
+	SetPointAimIndex(Index);
+}
+
+void AFPSTemplateFirearm::SetPointAimIndex(int32 Index)
+{
+	if (Index < PointAimSockets.Num())
+	{
+		PointAimIndex = Index;
+		if (GetCharacterComponent() && CharacterComponent->IsAiming())
+		{
+			if (PointAimIndex > INDEX_NONE)
+			{
+				ActivateCurrentSight(false);
+			}
+			else
+			{
+				ActivateCurrentSight(true);
+			}
+		}
+		OnRep_PointAimIndex();
+	}
+	else
+	{
+		PointAimIndex = INDEX_NONE;
+	}
+	
+	if (!HasAuthority())
+	{
+		Server_SetPointAiming(PointAimIndex);
+	}
+}
+
+void AFPSTemplateFirearm::CyclePointAim()
+{
+	if (++PointAimIndex > PointAimSockets.Num() - 1)
+	{
+		PointAimIndex = 0;
+	}
+	SetPointAimIndex(PointAimIndex);
 }
 
 void AFPSTemplateFirearm::CycleMagnifier()
 {
-	for (UFPSTemplate_PartComponent* PartComponent : MagnifierComponents)
+	for (const UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Magnifier))
 	{
 		if (PartComponent)
 		{
@@ -329,33 +515,11 @@ void AFPSTemplateFirearm::CycleMagnifier()
 			}
 		}
 	}
-	/*for (UFPSTemplate_PartComponent* PartComponent : PartComponents)
-	{
-		if (PartComponent && PartComponent->GetPart())
-		{
-			if (PartComponent->GetPart()->GetPartType() == EPartType::FlipMount)
-			{
-				if(AFPSTemplate_FlipMount* FlipMount = PartComponent->GetPart<AFPSTemplate_FlipMount>())
-				{
-					FlipMount->Use();
-					return;
-				}
-			}
-			for (UFPSTemplate_PartComponent* PartPartComponent : PartComponent->GetPart()->GetPartComponents())
-			{
-				if(AFPSTemplate_FlipMount* FlipMount = PartPartComponent->GetPart<AFPSTemplate_FlipMount>())
-				{
-					FlipMount->Use();
-					return;
-				}
-			}
-		}
-	}*/
 }
 
-void AFPSTemplateFirearm::UseLightLaser(ELightLaser Toggle)
+void AFPSTemplateFirearm::UseLightLaser(ELightLaser Toggle, bool bSync)
 {
-	for (UFPSTemplate_PartComponent* PartComponent : LightsLaserComponents)
+	for (UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::LightLaser))
 	{
 		if (PartComponent)
 		{
@@ -366,37 +530,31 @@ void AFPSTemplateFirearm::UseLightLaser(ELightLaser Toggle)
 				{
 					case ELightLaser::Light: LightLaser->ToggleLight(); break;
 					case ELightLaser::Laser: LightLaser->ToggleLaser(); break;
-					case ELightLaser::Both: LightLaser->ToggleLight(); LightLaser->ToggleLaser(); break;
+					case ELightLaser::Both: LightLaser->ToggleLightAndLaser(bSync); break;
 				}
 			}
 		}
 	}
-	
-	/*for (UFPSTemplate_PartComponent* PartComponent : PartComponents)
+}
+
+void AFPSTemplateFirearm::CycleLightLaserModes()
+{
+	for (UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::LightLaser))
 	{
-		if (PartComponent && PartComponent->GetPart())
+		if (PartComponent)
 		{
-			if (PartComponent->GetPart()->GetPartType() == EPartType::LightLaser)
+			AFPSTemplate_LightLaserBase* LightLaser = PartComponent->GetPart<AFPSTemplate_LightLaserBase>();
+			if (IsValid(LightLaser))
 			{
-				if(AFPSTemplate_LightLaserBase* LightLaser = PartComponent->GetPart<AFPSTemplate_LightLaserBase>())
-				{
-					LightLaser->ToggleLight();
-				}
-			}
-			for (UFPSTemplate_PartComponent* PartPartComponent : PartComponent->GetPart()->GetPartComponents())
-			{
-				if(AFPSTemplate_LightLaserBase* LightLaser = PartPartComponent->GetPart<AFPSTemplate_LightLaserBase>())
-				{
-					LightLaser->ToggleLight();
-				}
+				LightLaser->CycleThroughModes();
 			}
 		}
-	}*/
+	}
 }
 
 void AFPSTemplateFirearm::CycleLaserColor()
 {
-	for (UFPSTemplate_PartComponent* PartComponent : LightsLaserComponents)
+	for (const UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::LightLaser))
 	{
 		if (PartComponent)
 		{
@@ -411,30 +569,17 @@ void AFPSTemplateFirearm::CycleLaserColor()
 
 void AFPSTemplateFirearm::CycleReticle()
 {
-	if (AFPSTemplate_SightBase* Sight = GetCurrentSight())
+	AFPSTemplate_SightBase* Sight = GetCurrentSight();
+	if (IsValid(Sight))
 	{
 		Sight->CycleReticle();
 	}
 }
 
-void AFPSTemplateFirearm::ZoomOptic(bool bZoom)
-{
-	if (AFPSTemplate_SightBase* Sight = GetCurrentSight())
-	{
-		if (bZoom)
-		{
-			Sight->ZoomIn();
-		}
-		else
-		{
-			Sight->ZoomOut();
-		}
-	}
-}
-
 void AFPSTemplateFirearm::IncreaseReticleBrightness(bool Increase)
 {
-	if (AFPSTemplate_SightBase* Sight = GetCurrentSight())
+	AFPSTemplate_SightBase* Sight = GetCurrentSight();
+	if (IsValid(Sight))
 	{
 		if (Increase)
 		{
@@ -445,46 +590,54 @@ void AFPSTemplateFirearm::IncreaseReticleBrightness(bool Increase)
 			Sight->DecreaseBrightness();
 		}
 	}
+	else
+	{
+		RefreshCurrentSight();
+	}
 }
 
 float AFPSTemplateFirearm::GetOpticMagnification() const
 {
-	/*if (AFPSTemplate_SightBase* Sight = GetCurrentSight())
-	{
-		return Sight->GetMagnification();
-	}*/
-	return IsValid(GetCurrentSight()) ? GetCurrentSight()->GetMagnification() : 1.0f;
+	return PointAimIndex == INDEX_NONE && IsValid(GetCurrentSight()) ? GetCurrentSight()->GetMagnification() : 1.0f;
 }
 
-void AFPSTemplateFirearm::PointOfImpactUp(bool Up)
+void AFPSTemplateFirearm::PointOfImpactUp(bool Up, uint8 Clicks)
 {
 	AFPSTemplate_SightBase* Sight = GetCurrentSight();
 	if (IsValid(Sight))
 	{
 		if (Up)
 		{
-			Sight->PointOfImpactUp();
+			Sight->PointOfImpactUp(Clicks);
 		}
 		else
 		{
-			Sight->PointOfImpactDown();
+			Sight->PointOfImpactDown(Clicks);
 		}
+	}
+	else
+	{
+		RefreshCurrentSight();
 	}
 }
 
-void AFPSTemplateFirearm::PointOfImpactLeft(bool Left)
+void AFPSTemplateFirearm::PointOfImpactLeft(bool Left, uint8 Clicks)
 {
 	AFPSTemplate_SightBase* Sight = GetCurrentSight();
 	if (IsValid(Sight))
 	{
 		if (Left)
 		{
-			Sight->PointOfImpactLeft();
+			Sight->PointOfImpactLeft(Clicks);
 		}
 		else
 		{
-			Sight->PointOfImpactRight();
+			Sight->PointOfImpactRight(Clicks);
 		}
+	}
+	else
+	{
+		RefreshCurrentSight();
 	}
 }
 
@@ -500,6 +653,10 @@ void AFPSTemplateFirearm::ReturnSightToZero(EElevationWindage Dial)
 			case EElevationWindage::Both : Sight->ReturnToZeroElevation(); Sight->ReturnToZeroWindage(); break;
 		}
 	}
+	else
+	{
+		RefreshCurrentSight();
+	}
 }
 
 void AFPSTemplateFirearm::SetSightZero(const EElevationWindage Dial)
@@ -514,14 +671,22 @@ void AFPSTemplateFirearm::SetSightZero(const EElevationWindage Dial)
 		case EElevationWindage::Both : Sight->SetNewZeroElevation(); Sight->SetNewZeroWindage(); break;
 		}
 	}
+	else
+	{
+		RefreshCurrentSight();
+	}
 }
 
-FSightZero AFPSTemplateFirearm::GetSightZero() const
+FSightZero AFPSTemplateFirearm::GetSightZero()
 {
 	const AFPSTemplate_SightBase* Sight = GetCurrentSight();
 	if (IsValid(Sight))
 	{
 		return Sight->GetSightZero();
+	}
+	else
+	{
+		RefreshCurrentSight();
 	}
 	return FSightZero();
 }
@@ -538,22 +703,16 @@ AFPSTemplate_Muzzle* AFPSTemplateFirearm::GetMuzzleDevice()
 
 AActor* AFPSTemplateFirearm::GetMuzzleActor()
 {
-	if (MuzzleComponent)
+	AFPSTemplate_Muzzle* Muzzle = FirearmPartComponents.GetPart<AFPSTemplate_Muzzle>(EPartIndex::Muzzle);
+	if (IsValid(Muzzle))
 	{
-		AFPSTemplate_Muzzle* Muzzle = Cast<AFPSTemplate_Muzzle>(MuzzleComponent->GetPart());
-		if (IsValid(Muzzle))
-		{
-			return Muzzle->GetMuzzleAttachment();
-		}
-		return MuzzleComponent->GetPart();
+		return Muzzle->GetMuzzleAttachment();
 	}
-	if (BarrelComponent)
+
+	AFPSTemplate_Barrel* Barrel = FirearmPartComponents.GetPart<AFPSTemplate_Barrel>(EPartIndex::Barrel);
+	if (IsValid(Barrel))
 	{
-		AFPSTemplate_Barrel* Barrel = BarrelComponent->GetPart<AFPSTemplate_Barrel>();
-		if (IsValid(Barrel))
-		{
-			return Barrel->GetMuzzleDeviceActor();
-		}
+		return Barrel->GetMuzzleDeviceActor();
 	}
 	return this;
 }
@@ -592,31 +751,50 @@ TArray<FHitResult> AFPSTemplateFirearm::MuzzleTraceMulti(float Distance, ECollis
 
 void AFPSTemplateFirearm::DisableAllRenderTargets(bool Disable)
 {
-	for (UFPSTemplate_PartComponent* PartComponent : ComponentsWithRenderTargets)
+	for (UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::RenderTarget))
 	{
 		if (PartComponent && IsValid(PartComponent->GetPart()))
 		{
+			/*if (PartComponent->GetPart()->GetPartType() == EPartType::Magnifier)
+			{
+				if (AFPSTemplate_MagnifierBase* Magnifier = Cast<AFPSTemplate_MagnifierBase>(PartComponent->GetPart()))
+				{
+					if (Magnifier->GetSightInfront() == GetCurrentSight())
+					{
+						PartComponent->GetPart()->DisableRenderTarget(false);
+						continue;
+					}
+				}
+			}*/
+			
+			if (!Disable && PartComponent != CurrentSightComponent)
+			{
+				PartComponent->GetPart()->DisableRenderTarget(true);
+				continue;
+			}
+
 			PartComponent->GetPart()->DisableRenderTarget(Disable);
 		}
 	}
+	//RefreshCurrentSight();
 }
 
-void AFPSTemplateFirearm::PartsChanged()
-{	
+void AFPSTemplateFirearm::PartsChanged_Implementation()
+{
 	HandleSightComponents();
 	UpdateFirearmStats();
 	OnPartsChanged();
 }
 
-TArray<AFPSTemplate_PartBase*> AFPSTemplateFirearm::GetFirearmParts() const
+TArray<AFPSTemplate_PartBase*> AFPSTemplateFirearm::GetFirearmParts()
 {
 	TArray<AFPSTemplate_PartBase*> Parts;
-	for (UFPSTemplate_PartComponent* PartComponent : PartComponents)
+	for (const UFPSTemplate_PartComponent* PartComponent : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Part))
 	{
 		if (PartComponent && IsValid(PartComponent->GetPart()))
 		{
 			Parts.Add(PartComponent->GetPart());
-			for (UFPSTemplate_PartComponent* PartPartComponent : PartComponent->GetPart()->GetPartComponents())
+			for (const UFPSTemplate_PartComponent* PartPartComponent : PartComponent->GetPart()->GetPartComponents())
 			{
 				if (PartPartComponent && IsValid(PartPartComponent->GetPart()))
 				{
@@ -632,13 +810,9 @@ FTransform& AFPSTemplateFirearm::GetSprintPose()
 {
 	if (GetCharacterComponent())
 	{
-		if (!CharacterComponent->IsLocallyControlled())
+		if (!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson())
 		{
 			return ThirdPersonSprintPose; // THIRD PERSON HERE
-		}
-		else
-		{
-			return FirstPersonSprintPose;
 		}
 	}
 	return FirstPersonSprintPose;
@@ -648,13 +822,9 @@ FTransform& AFPSTemplateFirearm::GetHighPortPose()
 {
 	if (GetCharacterComponent())
 	{
-		if (!CharacterComponent->IsLocallyControlled())
+		if (!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson())
 		{
 			return ThirdPersonHighPortPose;
-		}
-		else
-		{
-			return FirstPersonHighPortPose;
 		}
 	}
 	return FirstPersonHighPortPose;
@@ -664,13 +834,9 @@ FTransform& AFPSTemplateFirearm::GetLowPortPose()
 {
 	if (GetCharacterComponent())
 	{
-		if (!CharacterComponent->IsLocallyControlled())
+		if (!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson())
 		{
 			return ThirdPersonLowPortPose;
-		}
-		else
-		{
-			return FirstPersonLowPortPose;
 		}
 	}
 	return FirstPersonLowPortPose;
@@ -680,13 +846,9 @@ FTransform& AFPSTemplateFirearm::GetBasePoseOffset()
 {
 	if (GetCharacterComponent())
 	{
-		if (!CharacterComponent->IsLocallyControlled())
+		if (!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson())
 		{
 			return ThirdPersonBasePoseOffset;
-		}
-		else
-		{
-			return FirstPersonBasePoseOffset;
 		}
 	}
 	return FirstPersonBasePoseOffset;
@@ -696,90 +858,181 @@ FTransform& AFPSTemplateFirearm::GetShortStockPose()
 {
 	if (GetCharacterComponent())
 	{
-		if (!CharacterComponent->IsLocallyControlled())
+		if (!CharacterComponent->IsLocallyControlled() || CharacterComponent->IsInThirdPerson())
 		{
 			return ThirdPersonShortStockPose;
-		}
-		else
-		{
-			return FirstPersonShortStockPose;
 		}
 	}
 	return FirstPersonShortStockPose;
 }
 
+void AFPSTemplateFirearm::SetShortStockInterpSpeed(float Speed)
+{
+	ShortStockInterpSpeed = Speed;
+}
+
+void AFPSTemplateFirearm::SetShortStockPose(const FTransform& Transform, bool bFirstPerson)
+{
+	const FTransform FixedTransform = UFPSTemplateStatics::FixTransform(Transform);
+	if (bFirstPerson)
+	{
+		FirstPersonShortStockPose = FixedTransform;
+	}
+	else
+	{
+		ThirdPersonShortStockPose = FixedTransform;
+	}
+}
+
+void AFPSTemplateFirearm::SetBasePoseOffset(const FTransform& Transform, bool bFirstPerson)
+{
+	const FTransform FixedTransform = UFPSTemplateStatics::FixTransform(Transform);
+	if (bFirstPerson)
+	{
+		FirstPersonBasePoseOffset = FixedTransform;
+	}
+	else
+	{
+		ThirdPersonBasePoseOffset = FixedTransform;
+	}
+}
+
+void AFPSTemplateFirearm::SetHighPortPose(const FTransform& Transform, bool bFirstPerson)
+{
+	const FTransform FixedTransform = UFPSTemplateStatics::FixTransform(Transform);
+	if (bFirstPerson)
+	{
+		FirstPersonHighPortPose = FixedTransform;
+	}
+	else
+	{
+		ThirdPersonHighPortPose = FixedTransform;
+	}
+}
+
+void AFPSTemplateFirearm::SetLowPortPose(const FTransform& Transform, bool bFirstPerson)
+{
+	const FTransform FixedTransform = UFPSTemplateStatics::FixTransform(Transform);
+	if (bFirstPerson)
+	{
+		FirstPersonLowPortPose = FixedTransform;
+	}
+	else
+	{
+		ThirdPersonLowPortPose = FixedTransform;
+	}
+}
+
+void AFPSTemplateFirearm::SetSprintPose(const FTransform& Transform, bool bFirstPerson)
+{
+	const FTransform FixedTransform = UFPSTemplateStatics::FixTransform(Transform);
+	if (bFirstPerson)
+	{
+		FirstPersonSprintPose = FixedTransform;
+	}
+	else
+	{
+		ThirdPersonSprintPose = FixedTransform;
+	}
+}
+
 void AFPSTemplateFirearm::SetCharacterComponent(UFPSTemplate_CharacterComponent* INCharacterComponent)
 {
-	//CycleSights();
 	CharacterComponent = INCharacterComponent;
 }
 
-void AFPSTemplateFirearm::AddPartCache(UFPSTemplate_PartComponent* PartComponent)
+void AFPSTemplateFirearm::AddPartCache_Implementation(UFPSTemplate_PartComponent* PartComponent)
 {
 	if (PartComponent && IsValid(PartComponent->GetPart()))
 	{
-		//FPSLog(TEXT("Adding: %s"), *PartComponent->GetPart()->GetName())
+		OnPartComponentAdded(PartComponent);
 		switch (PartComponent->GetPart()->GetPartType())
 		{
-		case EPartType::Barrel : BarrelComponent = PartComponent; break;
+		case EPartType::Barrel :
+			{
+				FirearmPartComponents.SetPart(PartComponent, EPartIndex::Barrel);
+				break;
+			}
 		case EPartType::Handguard :
 			{
-				HandguardComponent = PartComponent;
+				FirearmPartComponents.SetPart(PartComponent, EPartIndex::Handguard);
 				break;
 			}
 		case EPartType::Stock :
 			{
-				StockComponent = PartComponent;
+				FirearmPartComponents.SetPart(PartComponent, EPartIndex::Stock);
 				break;
 			}
 		case EPartType::Magnifier :
 			{
-				MagnifierComponents.AddUnique(PartComponent);
-				ComponentsWithRenderTargets.AddUnique(PartComponent);
+				FirearmPartComponentsOwner.AddPartComponent(PartComponent, EPartOwnerIndex::Magnifier);
+				FirearmPartComponentsOwner.AddPartComponent(PartComponent, EPartOwnerIndex::RenderTarget);
 				break;
 			}
 		case EPartType::LightLaser :
 			{
-				LightsLaserComponents.AddUnique(PartComponent);
+				FirearmPartComponentsOwner.AddPartComponent(PartComponent, EPartOwnerIndex::LightLaser);
 				break;
 			}
 		case EPartType::ForwardGrip :
 			{
-				ForwardGripComponent = PartComponent;
+				FirearmPartComponents.SetPart(PartComponent, EPartIndex::ForwardGrip);
 				break;
 			}
 		case EPartType::MuzzleDevice :
 			{
-				MuzzleComponent = PartComponent;
+				FirearmPartComponents.SetPart(PartComponent, EPartIndex::Muzzle);
 				break;
 			}
 		default: if (PartComponent->GetPart()->HasRenderTarget())
 			{
-				ComponentsWithRenderTargets.AddUnique(PartComponent);
+				FirearmPartComponentsOwner.AddPartComponent(PartComponent, EPartOwnerIndex::RenderTarget);
 			}
 		}
 	}
 }
 
-UAnimSequence* AFPSTemplateFirearm::GetGripAnimation() const
+UAnimSequence* AFPSTemplateFirearm::GetGripAnimation()
 {
-	if (ForwardGripComponent) // FOR COMPLETE FIREARMS (NO PART BUILDS)
+	const AFPSTemplate_ForwardGrip* ForwardGrip = FirearmPartComponents.GetPart<AFPSTemplate_ForwardGrip>(EPartIndex::ForwardGrip);
+	if (IsValid(ForwardGrip))
 	{
-		const AFPSTemplate_ForwardGrip* ForwardGrip = ForwardGripComponent->GetPart<AFPSTemplate_ForwardGrip>();
-		if (IsValid(ForwardGrip))
-		{
-			return ForwardGrip->GetGripAnimation();
-		}
+		return ForwardGrip->GetGripAnimation();
 	}
-	if (HandguardComponent)
+	
+	const AFPSTemplate_Handguard* Handguard = FirearmPartComponents.GetPart<AFPSTemplate_Handguard>(EPartIndex::Handguard);
+	if (IsValid(Handguard))
 	{
-		const AFPSTemplate_Handguard* Handguard = HandguardComponent->GetPart<AFPSTemplate_Handguard>();
-		if (IsValid(Handguard))
-		{
-			return Handguard->GetGripAnimation();
-		}
+		return Handguard->GetGripAnimation();
 	}
 	return GripAnimation;
+}
+
+void AFPSTemplateFirearm::SetupStabilizerComponent()
+{
+	if (!StabilizerComponent.IsValid())
+	{
+		StabilizerComponent = Cast<UFPS_FirearmStabilizerComponent>(GetComponentByClass(UFPS_FirearmStabilizerComponent::StaticClass()));
+	}
+	if (StabilizerComponent.IsValid())
+	{
+		StabilizerComponent->CacheEssentials();
+	}
+}
+
+UFPS_FirearmStabilizerComponent* AFPSTemplateFirearm::GetStabilizerComponent()
+{
+	SetupStabilizerComponent();
+	return StabilizerComponent.Get();
+}
+
+bool AFPSTemplateFirearm::IsStabilized() const
+{
+	if (StabilizerComponent.IsValid())
+	{
+		return StabilizerComponent->IsStabilized();
+	}
+	return false;
 }
 
 void AFPSTemplateFirearm::OnRep_FireMode()
@@ -807,13 +1060,23 @@ void AFPSTemplateFirearm::Server_SetFireMode_Implementation(EFirearmFireMode New
 	OnRep_FireMode();
 }
 
-void AFPSTemplateFirearm::CycleFireMode()
+void AFPSTemplateFirearm::CycleFireMode(bool bReverse)
 {
 	if (FireModes.Num() > 1)
 	{
-		if (++FireModeIndex > FireModes.Num() - 1)
+		if (bReverse)
 		{
-			FireModeIndex = 0;
+			if (--FireModeIndex < 0)
+			{
+				FireModeIndex = FireModes.Num() - 1;
+			}
+		}
+		else
+		{
+			if (++FireModeIndex > FireModes.Num() - 1)
+			{
+				FireModeIndex = 0;
+			}
 		}
 		FireMode = FireModes[FireModeIndex];
 		OnFireModeChanged();
@@ -836,85 +1099,58 @@ void AFPSTemplateFirearm::PerformProceduralRecoil(float Multiplier, bool PlayCam
 	}
 }
 
-TArray<UFPSTemplate_PartComponent*> AFPSTemplateFirearm::GetPartComponents() const
+TArray<UFPSTemplate_PartComponent*> AFPSTemplateFirearm::GetAllPartComponents()
 {
-	TArray<UFPSTemplate_PartComponent*> PartComponentsList = PartComponents;
-	for (UFPSTemplate_PartComponent* Part : PartComponents)
+	TArray<UFPSTemplate_PartComponent*> PartComponentsList = FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Part);
+	for (const UFPSTemplate_PartComponent* Part : FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Part))
 	{
-		if (Part && IsValid(Part->GetPart()))
+		if (IsValid(Part) && IsValid(Part->GetPart()))
 		{
 			PartComponentsList.Append(Part->GetPart()->GetPartComponents());
 		}
 	}
+	//FirearmPartComponentsOwner.SetPartComponents(PartComponentsList, EPartOwnerIndex::Part);
 	return PartComponentsList;
 }
 
-UFPSTemplate_PartComponent* AFPSTemplateFirearm::GetGripComponent() const
+UFPSTemplate_PartComponent* AFPSTemplateFirearm::GetGripComponent()
 {
-	if (ForwardGripComponent)
+	if (FirearmPartComponents.GetPartComponent(EPartIndex::ForwardGrip))
 	{
-		return ForwardGripComponent;
+		return FirearmPartComponents.GetPartComponent(EPartIndex::ForwardGrip);
 	}
-	if (HandguardComponent)
+	if (FirearmPartComponents.GetPartComponent(EPartIndex::Handguard))
 	{
-		return HandguardComponent;
+		return FirearmPartComponents.GetPartComponent(EPartIndex::Handguard);
 	}
 	return nullptr;
 }
 
-FTransform AFPSTemplateFirearm::GetSightSocketTransform()
-{
-	if (CurrentSightComponent && IsValid(CurrentSightComponent->GetPart()))
-	{
-		return CurrentSightComponent->GetPart()->GetAimSocketTransform();
-	}
-	if (SightComponents.Num() && SightComponents[0] && IsValid(SightComponents[0]->GetPart()))
-	{
-		return SightComponents[0]->GetPart()->GetAimSocketTransform();
-	}
-	return FirearmMesh->GetSocketTransform(AimSocket);
-}
-
-FTransform AFPSTemplateFirearm::GetDefaultSightSocketTransform()
-{
-	return FirearmMesh->DoesSocketExist(AimSocket) ? FirearmMesh->GetSocketTransform(AimSocket) : GetSightSocketTransform();
-}
-
 FTransform AFPSTemplateFirearm::GetLeftHandIKTransform()
 {
-	if (ForwardGripComponent) // FOR COMPLETE FIREARMS (NO PART BUILDS)
+	const AFPSTemplate_ForwardGrip* ForwardGrip = FirearmPartComponents.GetPart<AFPSTemplate_ForwardGrip>(EPartIndex::ForwardGrip);
+	if (IsValid(ForwardGrip))
 	{
-		const AFPSTemplate_ForwardGrip* ForwardGrip = ForwardGripComponent->GetPart<AFPSTemplate_ForwardGrip>();
-		if (IsValid(ForwardGrip))
-		{
-			return ForwardGrip->GetGripTransform();
-		}
+		return ForwardGrip->GetGripTransform();
 	}
-	if (HandguardComponent)
+
+	const AFPSTemplate_Handguard* Handguard = FirearmPartComponents.GetPart<AFPSTemplate_Handguard>(EPartIndex::Handguard);
+	if (IsValid(Handguard))
 	{
-		const AFPSTemplate_Handguard* Handguard = HandguardComponent->GetPart<AFPSTemplate_Handguard>();
-		if (IsValid(Handguard))
-		{
-			return Handguard->GetGripTransform();
-		}
+		return Handguard->GetGripTransform();
 	}
 	return FirearmMesh->GetSocketTransform(LeftHandIKSocket);
 }
 
-FProjectileTransform AFPSTemplateFirearm::GetMuzzleSocketProjectileTransform() const 
+/*FProjectileTransform AFPSTemplateFirearm::GetMuzzleSocketProjectileTransform() 
 {
-	if (BarrelComponent)
+	const AFPSTemplate_Barrel* Barrel = FirearmPartComponents.GetPart<AFPSTemplate_Barrel>(EPartIndex::Barrel);
+	if (IsValid(Barrel))
 	{
-		if (const AFPSTemplate_Barrel* Barrel = BarrelComponent->GetPart<AFPSTemplate_Barrel>())
-		{
-			if (IsValid(Barrel))
-			{
-				return Barrel->GetMuzzleSocketTransform();
-			}
-		}
+		return Barrel->GetMuzzleSocketTransform();
 	}
 	return FirearmMesh->GetSocketTransform(MuzzleSocket);
-}
+}*/
 
 FTransform AFPSTemplateFirearm::GetMuzzleSocketTransform()
 {
@@ -945,14 +1181,25 @@ FProjectileTransform AFPSTemplateFirearm::GetMuzzleProjectileSocketTransform(flo
 	{
 		RangeMeters = 2500;
 	}
-	
-	const FTransform SightTransform = GetSightSocketTransform();
+
+	const FTransform SightTransform = Execute_GetSightSocketTransform(this);
 	FTransform MuzzleTransform = GetMuzzleSocketTransform();
 	FRotator MuzzleRotation = UFPSTemplateStatics::GetEstimatedMuzzleToScopeZero(MuzzleTransform, SightTransform, RangeMeters);	
 	MuzzleRotation = UFPSTemplateStatics::SetMuzzleMOA(MuzzleRotation, MOA);
 
 	MuzzleTransform.SetRotation(MuzzleRotation.Quaternion());
 	return MuzzleTransform;
+}
+
+TArray<FProjectileTransform> AFPSTemplateFirearm::GetMultipleMuzzleProjectileSocketTransforms(float RangeMeters, float InchSpreadAt25Yards,	uint8 ShotCount)
+{
+	TArray<FProjectileTransform> ProjectileTransforms;
+	ProjectileTransforms.Reserve(ShotCount);
+	for (uint8 i = 0; i < ShotCount; ++i)
+	{
+		ProjectileTransforms.Add(GetMuzzleProjectileSocketTransform(RangeMeters, InchSpreadAt25Yards));
+	}
+	return ProjectileTransforms;
 }
 
 void AFPSTemplateFirearm::OnRep_CurrentSightComponent()
@@ -964,6 +1211,11 @@ void AFPSTemplateFirearm::OnRep_CurrentSightComponent()
 			CharacterComponent->GetAnimationInstance()->CycledSights();
 		}
 	}
+}
+
+void AFPSTemplateFirearm::OnRep_PointAimIndex()
+{
+	OnRep_CurrentSightComponent();
 }
 
 bool AFPSTemplateFirearm::Server_CycleSights_Validate(UFPSTemplate_PartComponent* SightComponent)
@@ -980,45 +1232,50 @@ void AFPSTemplateFirearm::Server_CycleSights_Implementation(UFPSTemplate_PartCom
 	}
 }
 
-/*UFPSTemplate_PartComponent* AFPSTemplateFirearm::GetSightComponent()
+void AFPSTemplateFirearm::ActivateCurrentSight(bool bActivate) const
 {
-	for (SightComponentIndex; SightComponentIndex < PartComponents.Num(); ++SightComponentIndex)
+	if (bActivate && PointAimIndex > INDEX_NONE)
 	{
-		if (UFPSTemplate_PartComponent* PartComponent = SightComponents[SightComponentIndex])
+		if (IsValid(CurrentSightComponent) && IsValid(CurrentSightComponent->GetPart()))
 		{
-			if (PartComponent != CurrentSightComponent)
-			{
-				if (AFPSTemplate_PartBase* Part = PartComponent->GetPart())
-				{
-					if (Part->GetPartType() == EPartType::Sight)
-					{
-						CurrentSightComponent = PartComponent;
-						return CurrentSightComponent;
-					}
-				}
-			}
+			CurrentSightComponent->GetPart()->DisableRenderTarget(true);
 		}
+		return;
 	}
-	return nullptr;
-}*/
+	if (IsValid(CurrentSightComponent) && IsValid(CurrentSightComponent->GetPart()))
+	{
+		CurrentSightComponent->GetPart()->DisableRenderTarget(!bActivate);
+	}
+}
 
 void AFPSTemplateFirearm::CycleSights()
 {
-	if (!bCanCycleSights)
+	if (!bCanCycleSights || PointAimIndex > INDEX_NONE)
 	{
 		return;
 	}
+
+	ActivateCurrentSight(false);
 	
 	bool FoundValidSight = false;
-	if (SightComponents.Num())
+	TArray<UFPSTemplate_PartComponent*> PartComponents = FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Sight);
+	if (PartComponents.Num())
 	{
-		if (++SightComponentIndex >= SightComponents.Num())
+		if (++SightComponentIndex >= PartComponents.Num())
 		{
 			SightComponentIndex = 0;
 		}
-		if (UFPSTemplate_PartComponent* SightComponent = SightComponents[SightComponentIndex])
+		if (UFPSTemplate_PartComponent* SightComponent = PartComponents[SightComponentIndex])
 		{
-			CurrentSightComponent = SightComponent;
+			const AFPSTemplate_SightBase* Sight = SightComponent->GetPart<AFPSTemplate_SightBase>();
+			if (IsValid(Sight) && Sight->Implements<UFPSTemplate_AimInterface>())
+			{
+				CurrentSightComponent = SightComponent;
+			}
+			else
+			{
+				CurrentSightComponent = SightComponent;
+			}
 			FoundValidSight = true;
 		}
 	}
@@ -1035,6 +1292,11 @@ void AFPSTemplateFirearm::CycleSights()
 		{
 			AnimInstance->CycledSights();
 		}
+	}
+
+	if (GetCharacterComponent())
+	{
+		ActivateCurrentSight(GetCharacterComponent()->IsAiming());
 	}
 }
 
@@ -1058,6 +1320,25 @@ void AFPSTemplateFirearm::RefreshCurrentSight()
 				AnimInstance->CycledSights();
 			}
 		}
+	}
+	else
+	{
+		CycleSights();
+	}
+
+	if (GetCharacterComponent())
+	{
+		ActivateCurrentSight(GetCharacterComponent()->IsAiming());
+	}
+}
+
+void AFPSTemplateFirearm::SetSight_Implementation(UFPSTemplate_PartComponent* SightComponent)
+{
+	const TArray<UFPSTemplate_PartComponent*> PartComponents = FirearmPartComponentsOwner.GetPartComponents(EPartOwnerIndex::Sight);
+	if (IsValid(SightComponent) && PartComponents.Contains(SightComponent))
+	{
+		CurrentSightComponent = SightComponent;
+		RefreshCurrentSight();
 	}
 }
 

@@ -24,6 +24,6 @@ AFPSTemplateCharacter::AFPSTemplateCharacter(const FObjectInitializer& ObjectIni
 
 	GetMesh()->bCastHiddenShadow = true;
 
-	// Commented out because we will derive our own CharacterComponent class!!!
+	// We will use our own component
 	//CharacterComponent = CreateDefaultSubobject<UFPSTemplate_CharacterComponent>(TEXT("CharacterComponent"));
 }

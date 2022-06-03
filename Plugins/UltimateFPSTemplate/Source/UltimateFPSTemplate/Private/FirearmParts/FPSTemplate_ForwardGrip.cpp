@@ -7,6 +7,8 @@
 
 AFPSTemplate_ForwardGrip::AFPSTemplate_ForwardGrip()
 {
+	NetUpdateFrequency = 1.0f;
+	
 	PartStats.Weight = 0.06f;
 	PartStats.ErgonomicsChangePercentage = 10.0f;
 	PartStats.RecoilChangePercentage = -8.0f;

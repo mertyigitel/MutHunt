@@ -30,13 +30,14 @@ public class UltimateFPSTemplate : ModuleRules
 				"Niagara",
 				"Json",
 				"JsonUtilities",
-				"Http",
-				"UMG"
+				"HTTP",
+				"UMG",
+				"GameplayTags",
+				"AnimGraphRuntime"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
-			
-		
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{

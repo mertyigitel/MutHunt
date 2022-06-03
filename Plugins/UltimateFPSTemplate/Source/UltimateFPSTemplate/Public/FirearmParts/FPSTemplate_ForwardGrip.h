@@ -16,9 +16,10 @@ public:
 	AFPSTemplate_ForwardGrip();
 	
 protected:
+	// Socket for the Left Hand IK (to position the left hand)
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Sockets")
 	FName HandGripSocket;
-
+	// Grip animation/pose to play for the left hand when this grip is in use. This is optional
 	UPROPERTY(EditDefaultsOnly, Category = "FPSTemplate | Default")
 	UAnimSequence* GripAnimation;
 
