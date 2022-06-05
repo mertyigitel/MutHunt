@@ -202,10 +202,10 @@ bool ASoldierCharacter::IsWeaponEquipped()
 	return (SoldierCharacterComponent && SoldierCharacterComponent->EquippedWeapon);
 }
 
-//bool ASoldierCharacter::IsAiming()
-//{
-//	return (Combat && Combat->bAiming);
-//}
+bool ASoldierCharacter::IsAiming()
+{
+	return (SoldierCharacterComponent && SoldierCharacterComponent->bIsAiming);
+}
 
 //AWeapon* ASoldierCharacter::GetEquippedWeapon()
 //{

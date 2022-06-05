@@ -36,8 +36,13 @@ private:
 
 	FRotator DeltaRotation;
 
-	/*UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	bool bAiming;*/
+	UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	bool bAiming;
+
+	UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	float Speed;
+
+	float CachedDirection;
 
 protected:
 

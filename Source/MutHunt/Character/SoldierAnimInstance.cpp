@@ -27,19 +27,44 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	Velocity.Z = 0.f;
 	Speed = Velocity.Size();*/
 
-	// Offset Yaw for Strafing
-	FRotator AimRotation = SoldierCharacter->GetBaseAimRotation();
-	FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(SoldierCharacter->GetVelocity());
-	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation);
-	/*DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 10.f);
-	CharacterDirection = DeltaRotation.Yaw;*/
-	CharacterDirection = DeltaRot.Yaw;
-
+	Speed = FMath::FInterpTo(Speed, CharacterVelocity, DeltaTime, 10.f);
 	bIsInAir = SoldierCharacter->GetMovementComponent()->IsFalling();
 	bIsAccelerating = SoldierCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0 ? true : false;
+
+	// Offset Yaw for Strafing
+	FRotator AimRotation = SoldierCharacter->GetBaseAimRotation();
+	FRotator MovementRotation;
+	if (bIsAccelerating)
+		MovementRotation = UKismetMathLibrary::MakeRotFromX(SoldierCharacter->GetVelocity());
+	else
+		MovementRotation = AimRotation;
+	
+	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation);
+
+	if (CharacterVelocity > 0.f)
+		CachedDirection = CharacterDirection;
+
+	if (!bIsAccelerating && Speed > 0.f)
+	{
+		CharacterDirection = CachedDirection;
+	}
+	else
+	{	
+		if (Speed > 0.f && Speed <= 50.f)
+		{
+			DeltaRotation = DeltaRot;
+			CharacterDirection = DeltaRotation.Yaw;
+		}
+		else
+		{
+			DeltaRotation = FMath::RInterpTo(DeltaRotation, DeltaRot, DeltaTime, 5.f);
+			CharacterDirection = DeltaRotation.Yaw;
+		}
+	}
+
 	bWeaponEquipped = SoldierCharacter->IsWeaponEquipped();
 	//EquippedWeapon = SoldierCharacter->GetEquippedWeapon();
-	//bIsAiming = SoldierCharacter->IsAiming();
+	bIsAiming = SoldierCharacter->IsAiming();
 
 
 }
