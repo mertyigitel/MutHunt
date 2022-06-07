@@ -29,6 +29,8 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 
 	OverheadWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("OverheadWidget"));
 	OverheadWidget->SetupAttachment(RootComponent);
+
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 }
 
 void ASoldierCharacter::BeginPlay()
@@ -44,6 +46,9 @@ void ASoldierCharacter::BeginPlay()
 	{
 		ClientMesh->DestroyComponent();
 	}*/
+
+	if (SoldierCharacterComponent)
+		SoldierCharacterComponent->Init(Camera, true, GetMesh(), GetMesh());
 }
 
 void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -58,6 +63,7 @@ void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("LookUp", this, &ASoldierCharacter::LookUp);
 
 	PlayerInputComponent->BindAction("Equip", IE_Pressed, this, &ASoldierCharacter::EquipButtonPressed);
+	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ASoldierCharacter::CrouchButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &ASoldierCharacter::AimButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &ASoldierCharacter::AimButtonReleased);
 }
@@ -129,6 +135,11 @@ void ASoldierCharacter::ServerEquipButtonPressed_Implementation()
 	{
 		SoldierCharacterComponent->EquipWeapon(OverlappingWeapon);
 	}
+}
+
+void ASoldierCharacter::CrouchButtonPressed()
+{
+	bIsCrouched ? UnCrouch() : Crouch();
 }
 
 void ASoldierCharacter::AimButtonPressed()

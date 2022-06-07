@@ -28,6 +28,7 @@ protected:
 	void Turn(float Value);
 	void LookUp(float Value);
 	void EquipButtonPressed();
+	void CrouchButtonPressed();
 	void AimButtonPressed();
 	void AimButtonReleased();
 	virtual void Jump() override;

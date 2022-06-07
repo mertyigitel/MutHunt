@@ -23,10 +23,6 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 
 	if (SoldierCharacter == nullptr) return;
 
-	/*FVector Velocity = SoldierCharacter->GetVelocity();
-	Velocity.Z = 0.f;
-	Speed = Velocity.Size();*/
-
 	Speed = FMath::FInterpTo(Speed, CharacterVelocity, DeltaTime, 10.f);
 	bIsInAir = SoldierCharacter->GetMovementComponent()->IsFalling();
 	bIsAccelerating = SoldierCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0 ? true : false;
@@ -63,6 +59,7 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	}
 
 	bWeaponEquipped = SoldierCharacter->IsWeaponEquipped();
+	bIsCrouched = SoldierCharacter->bIsCrouched;
 	//EquippedWeapon = SoldierCharacter->GetEquippedWeapon();
 	bIsAiming = SoldierCharacter->IsAiming();
 
