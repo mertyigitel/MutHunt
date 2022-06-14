@@ -37,8 +37,8 @@ protected:
 	
 	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
 	UFPSTemplate_CharacterComponent* CharacterComponent;
-	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
-	float CharacterDirection;
+	/*UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
+	float CharacterDirection;*/
 	UPROPERTY(BlueprintReadOnly, Category = "FPSTemplate | Default")
 	float CharacterVelocity;
 

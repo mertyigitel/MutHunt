@@ -21,7 +21,10 @@ private:
 	class ASoldierCharacter* SoldierCharacter;
 
 	UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	float Speed;
+	float SpeedForward;
+
+	UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	float SpeedSide;
 
 	UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	bool bIsInAir;
@@ -36,10 +39,6 @@ private:
 	bool bIsCrouched;
 
 	class AWeapon* EquippedWeapon;
-
-	FRotator DeltaRotation;
-
-	float CachedDirection;
 
 protected:
 

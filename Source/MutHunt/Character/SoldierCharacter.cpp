@@ -139,7 +139,15 @@ void ASoldierCharacter::ServerEquipButtonPressed_Implementation()
 
 void ASoldierCharacter::CrouchButtonPressed()
 {
-	bIsCrouched ? UnCrouch() : Crouch();
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		if (!GetCharacterMovement()->IsFalling())
+			Crouch();
+	}
 }
 
 void ASoldierCharacter::AimButtonPressed()
