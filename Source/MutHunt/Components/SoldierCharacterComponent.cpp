@@ -4,8 +4,14 @@
 #include "MutHunt/Weapon/Weapon.h"
 #include "MutHunt/Character/SoldierCharacter.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
-USoldierCharacterComponent::USoldierCharacterComponent() : Super::UFPSTemplate_CharacterComponent()
+USoldierCharacterComponent::USoldierCharacterComponent() : 
+	Super::UFPSTemplate_CharacterComponent(),
+	BaseWalkSpeed(400.f),
+	AimWalkSpeed(200.f),
+	BaseWalkSpeedCrouched(200.f),
+	AimWalkSpeedCrouched(100.f)
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
@@ -13,6 +19,51 @@ USoldierCharacterComponent::USoldierCharacterComponent() : Super::UFPSTemplate_C
 void USoldierCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (Character)
+	{
+		Character->GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed;
+		Character->GetCharacterMovement()->MaxWalkSpeedCrouched = BaseWalkSpeedCrouched;
+	}
+}
+
+void USoldierCharacterComponent::SetAiming(bool bAiming)
+{
+	if (Character == nullptr || EquippedWeapon == nullptr) { return; }
+
+	if (bAiming)
+	{
+		StartAiming();
+		Character->GetCharacterMovement()->MaxWalkSpeed = AimWalkSpeed;
+		Character->GetCharacterMovement()->MaxWalkSpeedCrouched = AimWalkSpeedCrouched;
+	}
+	else
+	{
+		StopAiming();
+		Character->GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed;
+		Character->GetCharacterMovement()->MaxWalkSpeedCrouched = BaseWalkSpeedCrouched;
+	}
+
+	if (!Character->HasAuthority())
+	{
+		ServerSetAiming(bAiming);
+	}
+}
+
+void USoldierCharacterComponent::ServerSetAiming_Implementation(bool bAiming)
+{
+	if (bAiming)
+	{
+		StartAiming();
+		Character->GetCharacterMovement()->MaxWalkSpeed = AimWalkSpeed;
+		Character->GetCharacterMovement()->MaxWalkSpeedCrouched = AimWalkSpeedCrouched;
+	}
+	else
+	{
+		StopAiming();
+		Character->GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed;
+		Character->GetCharacterMovement()->MaxWalkSpeedCrouched = BaseWalkSpeedCrouched;
+	}
 }
 
 void USoldierCharacterComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

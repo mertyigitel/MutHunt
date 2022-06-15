@@ -14,12 +14,16 @@ class MUTHUNT_API USoldierCharacterComponent : public UFPSTemplate_CharacterComp
 public:
 	USoldierCharacterComponent();
 	friend class ASoldierCharacter;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void EquipWeapon(class AWeapon* WeaponToEquip);
 protected:
 	virtual void BeginPlay() override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	void SetAiming(bool bAiming);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetAiming(bool bAiming);
 	
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
@@ -28,4 +32,17 @@ private:
 	
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedWeapon)
 	AWeapon* EquippedWeapon;
+
+	UPROPERTY(EditAnywhere)
+	float BaseWalkSpeed;
+
+	UPROPERTY(EditAnywhere)
+	float AimWalkSpeed;
+
+	UPROPERTY(EditAnywhere)
+	float BaseWalkSpeedCrouched;
+
+	UPROPERTY(EditAnywhere)
+	float AimWalkSpeedCrouched;
+
 };

@@ -152,20 +152,20 @@ void ASoldierCharacter::CrouchButtonPressed()
 
 void ASoldierCharacter::AimButtonPressed()
 {
-	/*if (Combat)
+	if (SoldierCharacterComponent)
 	{
-		Combat->SetAiming(true);
-	}*/
-	SoldierCharacterComponent->StartAiming();
+		SoldierCharacterComponent->SetAiming(true);
+	}
+	//SoldierCharacterComponent->StartAiming();
 }
 
 void ASoldierCharacter::AimButtonReleased()
 {
-	/*if (Combat)
+	if (SoldierCharacterComponent)
 	{
-		Combat->SetAiming(false);
-	}*/
-	SoldierCharacterComponent->StopAiming();
+		SoldierCharacterComponent->SetAiming(false);
+	}
+	//SoldierCharacterComponent->StopAiming();
 }
 
 void ASoldierCharacter::Jump()
