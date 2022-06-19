@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Actors/FPSTemplateCharacter.h"
+#include "MutHunt/MutHuntTypes/TurningInPlace.h"
 #include "SoldierCharacter.generated.h"
 
 UCLASS()
@@ -32,6 +33,7 @@ protected:
 	void AimButtonPressed();
 	void AimButtonReleased();
 	virtual void Jump() override;
+	void AimOffset(float DeltaTime);
 private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
@@ -52,9 +54,18 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerEquipButtonPressed();
 
+	float AO_Yaw;
+	float InterpAO_Yaw;
+	FRotator StartingAimRotation;
+	ETurningInPlace TurningInPlace;
+	
+	void TurnInPlace(float DeltaTime);
+
 public:	
 	void SetOverlappingWeapon(AWeapon* Weapon);
 	bool IsWeaponEquipped();
 	bool IsAiming();
 	//AWeapon* GetEquippedWeapon();
+	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
+	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
 };

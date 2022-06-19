@@ -33,5 +33,7 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	bIsCrouched = SoldierCharacter->bIsCrouched;
 	//EquippedWeapon = SoldierCharacter->GetEquippedWeapon();
 	bIsAiming = SoldierCharacter->IsAiming();
+	AO_Yaw = SoldierCharacter->GetAO_Yaw();
+	TurningInPlace = SoldierCharacter->GetTurningInPlace();
 
 }

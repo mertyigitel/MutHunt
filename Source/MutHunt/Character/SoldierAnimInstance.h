@@ -6,6 +6,7 @@
 #include "Animation/AnimInstance.h"
 #include "MutHunt/Weapon/Weapon.h"
 #include "FPSTemplateAnimInstance.h"
+#include "MutHunt/MutHuntTypes/TurningInPlace.h"
 #include "SoldierAnimInstance.generated.h"
 
 UCLASS()
@@ -39,6 +40,12 @@ private:
 	bool bIsCrouched;
 
 	class AWeapon* EquippedWeapon;
+
+	UPROPERTY(BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	float AO_Yaw;
+
+	UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	ETurningInPlace TurningInPlace;
 
 protected:
 
