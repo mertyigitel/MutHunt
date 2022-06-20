@@ -7,7 +7,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "MutHunt/Weapon/Weapon.h"
 #include "Net/UnrealNetwork.h"
-//#include "MutHunt/Components/SoldierCombatComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/FPSTemplate_CharacterComponent.h"
 #include "MutHunt/Components/SoldierCharacterComponent.h"
@@ -21,9 +20,6 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->bUsePawnControlRotation = true;
 	//Camera->SetupAttachment(GetMesh(), FName("Camera"));
-	
-	/*Combat = CreateDefaultSubobject<USoldierCombatComponent>(TEXT("CombatComponent"));
-	Combat->SetIsReplicated(true);*/
 
 	SoldierCharacterComponent = CreateDefaultSubobject<USoldierCharacterComponent>(TEXT("CharacterComponent"));
 	SoldierCharacterComponent->SetIsReplicated(true);
@@ -34,21 +30,14 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 
 	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+
+	NetUpdateFrequency = 66.f;
+	MinNetUpdateFrequency = 33.f;
 }
 
 void ASoldierCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	/*if (IsLocallyControlled())
-	{
-		ClientMesh->HideBoneByName(FName("neck_01"), PBO_None);
-		GetMesh()->SetVisibility(false);
-	}
-	else
-	{
-		ClientMesh->DestroyComponent();
-	}*/
 
 	if (SoldierCharacterComponent)
 		SoldierCharacterComponent->Init(Camera, true, GetMesh(), GetMesh());
@@ -166,7 +155,6 @@ void ASoldierCharacter::AimButtonPressed()
 	{
 		SoldierCharacterComponent->SetAiming(true);
 	}
-	//SoldierCharacterComponent->StartAiming();
 }
 
 void ASoldierCharacter::AimButtonReleased()
@@ -175,7 +163,6 @@ void ASoldierCharacter::AimButtonReleased()
 	{
 		SoldierCharacterComponent->SetAiming(false);
 	}
-	//SoldierCharacterComponent->StopAiming();
 }
 
 void ASoldierCharacter::Jump()
@@ -206,6 +193,7 @@ void ASoldierCharacter::AimOffset(float DeltaTime)
 		{
 			InterpAO_Yaw = AO_Yaw;
 		}
+		//TODO bunu false yapýp spinerotation'da yaw güncellemeyi deneyelim
 		bUseControllerRotationYaw = true;
 		TurnInPlace(DeltaTime);
 	}
@@ -213,7 +201,7 @@ void ASoldierCharacter::AimOffset(float DeltaTime)
 	if (Speed > 0.f || bIsInAir) // Running, or jumping
 	{
 		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
-		AO_Yaw = 0.f;
+		AO_Yaw = FMath::FInterpTo(AO_Yaw, 0.f, DeltaTime, 4.f);
 		bUseControllerRotationYaw = true;
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	}

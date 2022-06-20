@@ -35,5 +35,4 @@ void USoldierAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	bIsAiming = SoldierCharacter->IsAiming();
 	AO_Yaw = SoldierCharacter->GetAO_Yaw();
 	TurningInPlace = SoldierCharacter->GetTurningInPlace();
-
 }
