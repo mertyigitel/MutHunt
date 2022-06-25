@@ -20,6 +20,7 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PostInitializeComponents() override;
+	virtual void PostNetReceiveLocationAndRotation() override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -34,6 +35,7 @@ protected:
 	void AimButtonReleased();
 	virtual void Jump() override;
 	void AimOffset(float DeltaTime);
+	void SimProxiesTurn(float DeltaTime);
 private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
@@ -57,8 +59,17 @@ private:
 	float AO_Yaw;
 	float InterpAO_Yaw;
 	FRotator StartingAimRotation;
+
+	UPROPERTY(Replicated)
 	ETurningInPlace TurningInPlace;
-	
+
+	bool bRotateRootBone;
+	bool bShouldReplicateRotation;
+	bool bIsSimProxy;
+
+	UPROPERTY(Replicated)
+	float SoldierBaseAimYaw;
+
 	void TurnInPlace(float DeltaTime);
 
 public:	
@@ -68,4 +79,6 @@ public:
 	//AWeapon* GetEquippedWeapon();
 	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
 	FORCEINLINE ETurningInPlace GetTurningInPlace() const { return TurningInPlace; }
+	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone; }
+	FORCEINLINE bool IsSimProxy() const { return bIsSimProxy; }
 };

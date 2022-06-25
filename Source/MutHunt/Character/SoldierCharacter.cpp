@@ -33,6 +33,8 @@ ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer
 
 	NetUpdateFrequency = 66.f;
 	MinNetUpdateFrequency = 33.f;
+
+	bIsSimProxy = false;
 }
 
 void ASoldierCharacter::BeginPlay()
@@ -41,13 +43,29 @@ void ASoldierCharacter::BeginPlay()
 
 	if (SoldierCharacterComponent)
 		SoldierCharacterComponent->Init(Camera, true, GetMesh(), GetMesh());
+
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		//TODO bu ayarlar daha sonra performans için kontrol edilmeli
+		NetUpdateFrequency = 180.f;
+		MinNetUpdateFrequency = 90.f;
+
+		bIsSimProxy = true;
+	}
 }
 
 void ASoldierCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	AimOffset(DeltaTime);
+	if (GetLocalRole() > ROLE_SimulatedProxy)
+	{
+		AimOffset(DeltaTime);
+	}
+	else
+	{
+		SimProxiesTurn(DeltaTime);
+	}
 }
 
 void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -72,6 +90,8 @@ void ASoldierCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(ASoldierCharacter, OverlappingWeapon, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(ASoldierCharacter, TurningInPlace, COND_SimulatedOnly);
+	DOREPLIFETIME_CONDITION(ASoldierCharacter, SoldierBaseAimYaw, COND_SimulatedOnly);
 }
 
 void ASoldierCharacter::PostInitializeComponents()
@@ -80,6 +100,32 @@ void ASoldierCharacter::PostInitializeComponents()
 	if (SoldierCharacterComponent)
 	{
 		SoldierCharacterComponent->Character = this;
+	}
+}
+
+void ASoldierCharacter::PostNetReceiveLocationAndRotation()
+{
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		// Don't change transform if using relative position (it should be nearly the same anyway, or base may be slightly out of sync)
+		if (!ReplicatedBasedMovement.HasRelativeLocation())
+		{
+			const FRepMovement& ConstRepMovement = GetReplicatedMovement();
+			const FVector OldLocation = GetActorLocation();
+			const FVector NewLocation = FRepMovement::RebaseOntoLocalOrigin(ConstRepMovement.Location, this);
+			const FQuat OldRotation = GetActorQuat();
+
+			GetCharacterMovement()->bNetworkSmoothingComplete = false;
+			GetCharacterMovement()->bJustTeleported |= (OldLocation != NewLocation);
+			//GetCharacterMovement()->SmoothCorrection(OldLocation, OldRotation, NewLocation, ConstRepMovement.Rotation.Quaternion());
+			GetCharacterMovement()->SmoothCorrection(
+				OldLocation,
+				OldRotation,
+				NewLocation,
+				bShouldReplicateRotation ? ConstRepMovement.Rotation.Quaternion() : OldRotation);
+			OnUpdateSimulatedPosition(OldLocation, OldRotation);
+		}
+		GetCharacterMovement()->bNetworkUpdateReceived = true;
 	}
 }
 
@@ -179,6 +225,7 @@ void ASoldierCharacter::Jump()
 
 void ASoldierCharacter::AimOffset(float DeltaTime)
 {
+	//TODO SimProxiesTurn mantýðý burada denenecek
 	FVector Velocity = GetVelocity();
 	Velocity.Z = 0.f;
 	float Speed = Velocity.Size();
@@ -186,6 +233,7 @@ void ASoldierCharacter::AimOffset(float DeltaTime)
 
 	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
 	{
+		bRotateRootBone = true;
 		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
 		AO_Yaw = DeltaAimRotation.Yaw;
@@ -193,17 +241,57 @@ void ASoldierCharacter::AimOffset(float DeltaTime)
 		{
 			InterpAO_Yaw = AO_Yaw;
 		}
-		//TODO bunu false yapýp spinerotation'da yaw güncellemeyi deneyelim
 		bUseControllerRotationYaw = true;
 		TurnInPlace(DeltaTime);
 	}
 
 	if (Speed > 0.f || bIsInAir) // Running, or jumping
 	{
+		bRotateRootBone = false;
 		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 		AO_Yaw = FMath::FInterpTo(AO_Yaw, 0.f, DeltaTime, 4.f);
 		bUseControllerRotationYaw = true;
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	}
+
+	SoldierBaseAimYaw = GetBaseAimRotation().Yaw;
+}
+
+void ASoldierCharacter::SimProxiesTurn(float DeltaTime)
+{
+	bRotateRootBone = false;
+
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0.f;
+	float Speed = Velocity.Size();
+	bool bIsInAir = GetCharacterMovement()->IsFalling();
+
+	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
+	{
+		bUseControllerRotationYaw = false;
+		bShouldReplicateRotation = false;
+
+		FRotator CurrentAimRotation = FRotator(0.f, SoldierBaseAimYaw, 0.f);
+		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, GetActorRotation());
+		AO_Yaw = DeltaAimRotation.Yaw;
+
+		FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, SoldierBaseAimYaw, 0.f), DeltaTime, 4.f);
+		if (TurningInPlace != ETurningInPlace::ETIP_NotTurning)
+			SetActorRotation(NewRotation);
+	}
+
+	if (Speed > 0.f || bIsInAir) // Running, or jumping
+	{
+		AO_Yaw = FMath::FInterpTo(AO_Yaw, 0.f, DeltaTime, 4.f);
+
+		FRotator NewRotation = FMath::RInterpTo(GetActorRotation(), FRotator(0.f, SoldierBaseAimYaw, 0.f), DeltaTime, 4.f);
+		if (FMath::Abs(GetActorRotation().Yaw - SoldierBaseAimYaw) > 2.f)
+			SetActorRotation(NewRotation);
+		else
+		{
+			bShouldReplicateRotation = true;
+			bUseControllerRotationYaw = true;
+		}
 	}
 }
 
