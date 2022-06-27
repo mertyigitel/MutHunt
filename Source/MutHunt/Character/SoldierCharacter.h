@@ -72,6 +72,10 @@ private:
 
 	void TurnInPlace(float DeltaTime);
 
+	float SoldierYawLastTick;
+	float SoldierYaw;
+	float YawChangeOverFrame;
+
 public:	
 	void SetOverlappingWeapon(AWeapon* Weapon);
 	bool IsWeaponEquipped();

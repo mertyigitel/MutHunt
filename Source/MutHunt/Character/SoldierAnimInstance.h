@@ -16,6 +16,7 @@ class MUTHUNT_API USoldierAnimInstance : public UFPSTemplateAnimInstance
 public:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaTime);
+	void AimOffsetYaw(float DeltaTime);
 
 private:
 	UPROPERTY(BlueprintReadOnly, Category = Character, meta = (AllowPrivateAccess = "true"))
@@ -53,6 +54,24 @@ private:
 	UPROPERTY(BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	bool bIsSimProxy;
 
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Aim Offset", meta = (AllowPrivateAccess = "true"))
+	float RootYawOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Aim Offset", meta = (AllowPrivateAccess = "true"))
+	float SoldierYaw;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Aim Offset", meta = (AllowPrivateAccess = "true"))
+	float SoldierYawLastTick;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Aim Offset", meta = (AllowPrivateAccess = "true"))
+	float YawChangeOverFrame;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Aim Offset", meta = (AllowPrivateAccess = "true"))
+	float SoldierBaseAimYaw;
+
 protected:
 
+public:
+	FORCEINLINE float GetAO_Yaw() const { return AO_Yaw; }
 };

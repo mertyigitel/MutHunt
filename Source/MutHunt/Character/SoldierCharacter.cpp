@@ -12,6 +12,7 @@
 #include "MutHunt/Components/SoldierCharacterComponent.h"
 #include "Components/WidgetComponent.h"
 #include <Kismet/KismetMathLibrary.h>
+#include "SoldierAnimInstance.h"
 
 ASoldierCharacter::ASoldierCharacter(const FObjectInitializer& ObjectInitializer) : Super::AFPSTemplateCharacter(ObjectInitializer)
 {
@@ -225,18 +226,21 @@ void ASoldierCharacter::Jump()
 
 void ASoldierCharacter::AimOffset(float DeltaTime)
 {
-	//TODO SimProxiesTurn mantýðý burada denenecek
 	FVector Velocity = GetVelocity();
 	Velocity.Z = 0.f;
 	float Speed = Velocity.Size();
 	bool bIsInAir = GetCharacterMovement()->IsFalling();
 
+	USoldierAnimInstance* SoldierAnimInstance = Cast<USoldierAnimInstance>(GetMesh()->GetAnimInstance());
+	if (SoldierAnimInstance)
+	{
+		AO_Yaw = SoldierAnimInstance->GetAO_Yaw();
+	}
+
 	if (Speed == 0.f && !bIsInAir) // standing still, not jumping
 	{
 		bRotateRootBone = true;
-		FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
-		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
-		AO_Yaw = DeltaAimRotation.Yaw;
+
 		if (TurningInPlace == ETurningInPlace::ETIP_NotTurning)
 		{
 			InterpAO_Yaw = AO_Yaw;
@@ -248,13 +252,45 @@ void ASoldierCharacter::AimOffset(float DeltaTime)
 	if (Speed > 0.f || bIsInAir) // Running, or jumping
 	{
 		bRotateRootBone = false;
-		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
-		AO_Yaw = FMath::FInterpTo(AO_Yaw, 0.f, DeltaTime, 4.f);
 		bUseControllerRotationYaw = true;
 		TurningInPlace = ETurningInPlace::ETIP_NotTurning;
 	}
 
 	SoldierBaseAimYaw = GetBaseAimRotation().Yaw;
+
+	//*********************************************** DEPRECATED **************************************************
+	// 
+	////TODO AimOffset ve SimProxiesTurn animation blueprinte taþýnacak
+	//FVector Velocity = GetVelocity();
+	//Velocity.Z = 0.f;
+	//float Speed = Velocity.Size();
+	//bool bIsInAir = GetCharacterMovement()->IsFalling();
+	//
+	//if (Speed == 0.f && !bIsInAir) // standing still, not jumping
+	//{
+	//	bRotateRootBone = true;
+	//	FRotator CurrentAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+	//	FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+	//	AO_Yaw = DeltaAimRotation.Yaw;
+	//	if (TurningInPlace == ETurningInPlace::ETIP_NotTurning)
+	//	{
+	//		InterpAO_Yaw = AO_Yaw;
+	//	}
+	//	bUseControllerRotationYaw = true;
+	//	TurnInPlace(DeltaTime);
+	//}
+	//
+	//if (Speed > 0.f || bIsInAir) // Running, or jumping
+	//{
+	//	bRotateRootBone = false;
+	//	StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+	//	AO_Yaw = FMath::FInterpTo(AO_Yaw, 0.f, DeltaTime, 4.f);
+	//	bUseControllerRotationYaw = true;
+	//	TurningInPlace = ETurningInPlace::ETIP_NotTurning;
+	//}
+	//
+	//SoldierBaseAimYaw = GetBaseAimRotation().Yaw;
+	//*********************************************** DEPRECATED **************************************************
 }
 
 void ASoldierCharacter::SimProxiesTurn(float DeltaTime)
