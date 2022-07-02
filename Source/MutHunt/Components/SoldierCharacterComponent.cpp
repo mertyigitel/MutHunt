@@ -94,3 +94,18 @@ void USoldierCharacterComponent::OnRep_EquippedWeapon()
 {
 
 }
+
+void USoldierCharacterComponent::FireButtonPressed(bool bPressed)
+{
+	if (EquippedWeapon)
+	{
+		if (bPressed)
+		{
+			EquippedWeapon->Fire();
+		}
+		else
+		{
+			EquippedWeapon->StopFire();
+		}
+	}
+}

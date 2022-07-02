@@ -84,6 +84,8 @@ void ASoldierCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ASoldierCharacter::CrouchButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &ASoldierCharacter::AimButtonPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &ASoldierCharacter::AimButtonReleased);
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ASoldierCharacter::FireButtonPressed);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &ASoldierCharacter::FireButtonReleased);
 }
 
 void ASoldierCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -405,3 +407,19 @@ bool ASoldierCharacter::IsAiming()
 //
 //	return Combat->EquippedWeapon;
 //}
+
+void ASoldierCharacter::FireButtonPressed()
+{
+	if (SoldierCharacterComponent)
+	{
+		SoldierCharacterComponent->FireButtonPressed(true);
+	}
+}
+
+void ASoldierCharacter::FireButtonReleased()
+{
+	if (SoldierCharacterComponent)
+	{
+		SoldierCharacterComponent->FireButtonPressed(false);
+	}
+}

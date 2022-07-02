@@ -36,6 +36,8 @@ protected:
 	virtual void Jump() override;
 	void AimOffset(float DeltaTime);
 	void SimProxiesTurn(float DeltaTime);
+	void FireButtonPressed();
+	void FireButtonReleased();
 private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))

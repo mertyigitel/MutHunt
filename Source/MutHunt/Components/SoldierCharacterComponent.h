@@ -27,6 +27,8 @@ protected:
 	
 	UFUNCTION()
 	void OnRep_EquippedWeapon();
+
+	void FireButtonPressed(bool bPressed);
 private:
 	class ASoldierCharacter* Character;
 	
@@ -44,5 +46,4 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	float AimWalkSpeedCrouched;
-
 };
