@@ -6,6 +6,7 @@
 #include "Components/WidgetComponent.h"
 #include "MutHunt/Character/SoldierCharacter.h"
 #include "Net/UnrealNetwork.h"
+#include "Animation/AnimationAsset.h"
 
 AWeapon::AWeapon(const FObjectInitializer& ObjectInitializer) : Super::AFPSTemplateFirearm(ObjectInitializer)
 {
@@ -104,5 +105,18 @@ void AWeapon::ShowPickupWidget(bool bShowWidget)
 	{
 		PickupWidget->SetVisibility(bShowWidget);
 	}
+}
+
+void AWeapon::Fire_Implementation()
+{
+	if (FireAnimation && bCanFire)
+	{
+		FirearmMesh->PlayAnimation(FireAnimation, false);
+	}
+}
+
+void AWeapon::StopFire_Implementation()
+{
+	
 }
 

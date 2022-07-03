@@ -88,6 +88,7 @@ void USoldierCharacterComponent::EquipWeapon(class AWeapon* WeaponToEquip)
 	EquippedWeapon->SetWeaponState(EWeaponState::EWS_Equipped);
 	EquippedWeapon->SetOwner(Character);
 	EquippedWeapon->ShowPickupWidget(false);
+	EquippedWeapon->UpdateCanFire();
 }
 
 void USoldierCharacterComponent::OnRep_EquippedWeapon()
@@ -97,15 +98,42 @@ void USoldierCharacterComponent::OnRep_EquippedWeapon()
 
 void USoldierCharacterComponent::FireButtonPressed(bool bPressed)
 {
-	if (EquippedWeapon)
+	bFireButtonPressed = bPressed;
+
+	if (EquippedWeapon == nullptr) { return; }
+
+	if (bFireButtonPressed)
 	{
-		if (bPressed)
-		{
-			EquippedWeapon->Fire();
-		}
-		else
-		{
-			EquippedWeapon->StopFire();
-		}
+		EquippedWeapon->Fire(); // UltimateFPSTemplate multiplayer logic is done in blueprint
+		ServerFire();
 	}
+	else
+	{
+		EquippedWeapon->StopFire(); // UltimateFPSTemplate multiplayer logic is done in blueprint
+		ServerStopFire();
+	}
+}
+
+void USoldierCharacterComponent::ServerFire_Implementation()
+{
+	MulticastFire();
+}
+
+void USoldierCharacterComponent::MulticastFire_Implementation()
+{
+	if (EquippedWeapon == nullptr) { return; }
+
+	EquippedWeapon->Fire_Implementation();
+}
+
+void USoldierCharacterComponent::ServerStopFire_Implementation()
+{
+	MulticastStopFire();
+}
+
+void USoldierCharacterComponent::MulticastStopFire_Implementation()
+{
+	if (EquippedWeapon == nullptr) { return; }
+
+	EquippedWeapon->StopFire_Implementation();
 }

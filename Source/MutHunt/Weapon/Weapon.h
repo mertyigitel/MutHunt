@@ -27,6 +27,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	void ShowPickupWidget(bool bShowWidget);
+	virtual void Fire_Implementation() override;
+	virtual void StopFire_Implementation() override;
 protected:
 	virtual void BeginPlay() override;
 
@@ -64,8 +66,17 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "WeaponProperties")
 	class UWidgetComponent* PickupWidget;
 
+	UPROPERTY(EditAnywhere, Category = "WeaponProperties")
+	class UAnimationAsset* FireAnimation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "WeaponProperties", meta = (AllowPrivateAccess = "true"))
+	bool bCanFire;
 public:
 	void SetWeaponState(EWeaponState State);
 	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
 	//FORCEINLINE USkeletalMeshComponent* GetWeaponMesh() const { return WeaponMesh; }
+	
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "WeaponProperties")
+	void UpdateCanFire();
+	void UpdateCanFire_Implementation() { UE_LOG(LogTemp, Warning, TEXT("UpdateCanFire Implementation Example")); }
 };
